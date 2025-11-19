@@ -31,7 +31,7 @@
 #include "framebuf.h"
 #include "font_petme128_8x8.h"
 
-framebuf::framebuf(uint16_t width_, uint16_t heigth_) : width(width_), height(heigth_) {
+framebuf::framebuf(uint16_t width_, uint16_t heigth_) : cursor_x(0), cursor_y(0), font(nullptr), width(width_), height(heigth_) {
 
 }
 
@@ -120,38 +120,72 @@ void framebuf::text(const std::string &str, uint16_t x, uint16_t y, uint32_t col
     text(str.c_str(), x, y, color);
 }
 
+void framebuf::blit(framebuf &fb, int16_t x, int16_t y) {
+    blit_fb(fb, x, y, no_key_color, nullptr);
+}
+
+void framebuf::blit(framebuf &fb, int16_t x, int16_t y, uint32_t key) {
+    blit_fb(fb, x, y, key, nullptr);
+}
+
+void framebuf::blit(framebuf &fb, int16_t x, int16_t y, uint32_t key, const framebuf &palette) {
+    blit_fb(fb, x, y, key, &palette);
+
+}
+
+void framebuf::blit(framebuf &fb, int16_t x, int16_t y, const framebuf &palette) {
+    blit_fb(fb, x, y, no_key_color, &palette);
+
+}
+
 void framebuf::text(const char *str, uint16_t x, uint16_t y, uint32_t color) {
-    // loop over chars
-    for (; *str; ++str) {
-        // get char and make sure its in range of font
-        int chr = *(uint8_t *)str;
-        if (chr < 32 || chr > 127) {
-            chr = 127;
-        }
-        // get char data
-        const uint8_t *chr_data = &font_petme128_8x8[(chr - 32) * 8];
-        // loop over char data
-        for (int j = 0; j < 8; j++, x++) {
-            if (0 <= x && x < width) { // clip x
-                uint32_t vline_data = chr_data[j]; // each byte is a column of 8 pixels, LSB at top
-                for (int y1 = y; vline_data; vline_data >>= 1, y1++) { // scan over vertical column
-                    if (vline_data & 1) { // only draw if pixel set
-                        if (0 <= y1 && y1 < height) { // clip y
-                            setpixel(x, y1, color);
-                        }
-                    }
-                }
+    if(font) {
+        // loop over chars
+        cursor_x = x;
+        cursor_y = y;
+        for (; *str; ++str) {
+            int chr = *str;
+            if(chr == '\n') {
+                // move to next line
+                cursor_y += font->yAdvance;
+                cursor_x = x;
+            }
+            else if(chr == '\r') {
+                // move to beginning of the line
+                cursor_x = x;
+            }
+            else {
+                drawgfxchar(chr, color);
             }
         }
     }
-
+    else {
+        // loop over chars
+        cursor_x = x;
+        cursor_y = y;
+        for (; *str; ++str) {
+            int chr = *str;
+            if(chr == '\n') {
+                // move to next line
+                cursor_y += 8; // the default font is fixed 8x8
+                cursor_x = x;
+            }
+            else if(chr == '\r') {
+                // move to beginning of the line
+                cursor_x = x;
+            }
+            else {
+                drawchar(chr, color);
+            }
+        }
+    }
 }
 
 void framebuf::fill(uint32_t color) {
     fill_rect(0, 0, width, height, color);
 }
 
-void framebuf::blit(framebuf &source, int16_t x, int16_t y, uint32_t key, const framebuf *palette) {
+void framebuf::blit_fb(framebuf &source, int16_t x, int16_t y, uint32_t key, const framebuf *palette) {
 
     if (
             (x >= width) ||
@@ -226,5 +260,60 @@ void framebuf::scroll(int16_t xstep, int16_t ystep) {
         }
     }
 
+}
+
+void framebuf::setfont(const GFXfont *font) {
+    this->font = font;
+}
+
+void framebuf::drawchar(int c, uint32_t color) {
+    if (c < 32 || c > 127) {
+        c = 127;
+    }
+    // get char data
+    const uint8_t *chr_data = &font_petme128_8x8[(c - 32) * 8];
+    // loop over char data
+    for (int j = 0; j < 8; j++, cursor_x++) {
+        if (0 <= cursor_x && cursor_x < width) { // clip x
+            uint32_t vline_data = chr_data[j]; // each byte is a column of 8 pixels, LSB at top
+            for (int y1 = cursor_y; vline_data; vline_data >>= 1, y1++) { // scan over vertical column
+                if (vline_data & 1) { // only draw if pixel set
+                    if (0 <= y1 && y1 < height) { // clip y
+                        setpixel(cursor_x, y1, color);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void framebuf::drawgfxchar(int c, uint32_t color) {
+    if(c < font->first || c > font->last) {
+        if(font->first > 32) return; // return if can't convert unprintable char to space
+        c = 32;
+    }
+    c -= font->first;
+    GFXglyph *glyph = font->glyph + c;
+    uint8_t *bitmap = font->bitmap;
+
+    uint16_t bo = glyph->bitmapOffset;
+    uint8_t w = glyph->width, h = glyph->height;
+    int8_t xo = glyph->xOffset,
+            yo = glyph->yOffset;
+    uint8_t xx, yy, bits = 0, bit = 0;
+    //int16_t xo16 = 0, yo16 = 0;
+
+    for (yy = 0; yy < h; yy++) {
+        for (xx = 0; xx < w; xx++) {
+            if (!(bit++ & 7)) {
+                bits = bitmap[bo++];
+            }
+            if (bits & 0x80) {
+                setpixel(cursor_x + xo + xx, cursor_y + yo + yy, color);
+             }
+            bits <<= 1;
+        }
+    }
+    cursor_x += glyph->xAdvance;
 }
 

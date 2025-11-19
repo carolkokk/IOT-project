@@ -52,12 +52,14 @@ mono_vlsb::mono_vlsb(const uint8_t *image, uint8_t width_, uint16_t height_, uin
 
 
 void mono_vlsb::setpixel(uint16_t x, uint16_t y, uint32_t color) {
+    if(x >= width || y >= height) return;
     size_t index = (y >> 3) * stride + x + buffer_offset;
     uint8_t offset = y & 0x07;
     buffer.get()[index] = (buffer.get()[index] & ~(0x01 << offset)) | ((color != 0) << offset);
 }
 
 uint32_t mono_vlsb::getpixel(uint16_t x, uint16_t y) const {
+    if(x >= width || y >= height) return 0;
     return (buffer.get()[(y >> 3) * stride + x + buffer_offset] >> (y & 0x07)) & 0x01;
 }
 
