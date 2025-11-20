@@ -34,6 +34,14 @@ add_executable(${ProjectName}
 #        display/ssd1306.h
         display/ssd1306os.h
         display/ssd1306os.cpp
+
+        Task_Control/Control.cpp
+        Task_Control/Control.h
+        Task_UI/UI.cpp
+        Task_UI/UI.h
+        Task_Network/Network.cpp
+        Task_Network/Network.h
+
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
