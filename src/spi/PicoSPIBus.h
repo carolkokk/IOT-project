@@ -6,7 +6,7 @@
 #define PICOSPIBUS_H
 
 #include <climits>
-#include <hardware/spi.h>
+#include "hardware/spi.h"
 #include "spi_device.h"
 
 class PicoSPIBus {

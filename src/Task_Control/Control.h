@@ -4,6 +4,9 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include "task.h"
+#include "PicoI2C.h"
+#include <memory>
+#include "Temp_Rh/BME680.h"
 
 class Control {
 public:

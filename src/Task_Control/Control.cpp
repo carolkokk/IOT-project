@@ -24,6 +24,9 @@ void Control::task_impl() {
     send_numbers.number = 0;
     Message received{};
 
+    auto i2cbus0 = std::make_shared<PicoI2C>(0, 100000);
+    BME680 temp_rh(i2cbus0, 0x76);
+
     while(true) {
         xQueueSendToBack(to_UI, &send_numbers, portMAX_DELAY);
         xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
@@ -35,7 +38,8 @@ void Control::task_impl() {
             {
                 printf("received %u\n",received.number);
             }
-
+            printf("T: %.2f C\n", temp_rh.read_temp());
+            printf("RH: %.2f %%\n", temp_rh.read_rh());
         }
         vTaskDelayUntil(&lastWakeTime, period);
     }
