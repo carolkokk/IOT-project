@@ -46,6 +46,18 @@ add_executable(${ProjectName}
         spi/PicoSPIDevice.cpp
         spi/PicoSPIDevice.h
 
+#        display/ssd1306.cpp
+#        display/ssd1306.h
+        display/ssd1306os.h
+        display/ssd1306os.cpp
+
+        Task_Control/Control.cpp
+        Task_Control/Control.h
+        Task_UI/UI.cpp
+        Task_UI/UI.h
+        Task_Network/Network.cpp
+        Task_Network/Network.h
+
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
@@ -56,10 +68,8 @@ target_include_directories(${ProjectName} PRIVATE
         modbus
         uart
         i2c
-        spi
         display
         ipstack
-        TFT_eSPI
 )
 
 target_compile_definitions(${ProjectName} PRIVATE
@@ -72,11 +82,11 @@ target_compile_definitions(${ProjectName} PRIVATE
 target_link_libraries(${ProjectName} 
         pico_stdlib
         hardware_i2c
-        hardware_spi
         FreeRTOS-Kernel-Heap4
         pico_cyw43_arch_lwip_sys_freertos
         pico_lwip_mbedtls
         pico_mbedtls
+
 )
 
 # Ignore warnings from lwip code
@@ -89,5 +99,5 @@ set_source_files_properties(
 pico_add_extra_outputs(${ProjectName})
 
 # Disable usb output, enable uart output
-pico_enable_stdio_usb(${PROJECT_NAME} 1)
-pico_enable_stdio_uart(${PROJECT_NAME} 0)
+pico_enable_stdio_usb(${PROJECT_NAME} 0)
+pico_enable_stdio_uart(${PROJECT_NAME} 1)
