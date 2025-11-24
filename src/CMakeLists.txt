@@ -56,6 +56,7 @@ add_executable(${ProjectName}
         Temp_Rh/BME680.h
         Temp_Rh/BME680_wrapper.cpp
         Temp_Rh/BME680_wrapper.h
+        Temp_Rh/BME68x_SensorAPI/bme68x.c
 
 )
 
@@ -99,5 +100,5 @@ set_source_files_properties(
 pico_add_extra_outputs(${ProjectName})
 
 # Disable usb output, enable uart output
-pico_enable_stdio_usb(${PROJECT_NAME} 0)
-pico_enable_stdio_uart(${PROJECT_NAME} 1)
+pico_enable_stdio_usb(${ProjectName} 0)
+pico_enable_stdio_uart(${ProjectName} 1)

@@ -12,8 +12,8 @@ int8_t bme_i2c_read(uint8_t reg, uint8_t *data, uint32_t len, void *intf_ptr) {
     auto context = static_cast<BME_I2C_Context*>(intf_ptr);
 
     uint8_t regbuffer = reg;
-    context->bus->write(context->addr, &regbuffer, 1);
 
+    context->bus->write(context->addr, &regbuffer, 1);
     context->bus->read(context->addr, data, len);
 
     return BME68X_OK;

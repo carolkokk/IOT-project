@@ -38,9 +38,10 @@ void Control::task_impl() {
             {
                 printf("received %u\n",received.number);
             }
-            printf("T: %.2f C\n", temp_rh.read_temp());
-            printf("RH: %.2f %%\n", temp_rh.read_rh());
         }
+
+        printf("T: %.2f C\n", temp_rh.read_temp());
+        printf("RH: %.2f %%\n", temp_rh.read_rh());
         vTaskDelayUntil(&lastWakeTime, period);
     }
 }
