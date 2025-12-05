@@ -1,6 +1,8 @@
 #include "Control.h"
 #include <cstdio>
 #include "Structs.h"
+#include "PWM/PWM.h"
+#include "Humidifier/Humidifier.h"
 
 Control::Control(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
@@ -17,6 +19,14 @@ void Control::task_wrap(void *pvParameters) {
 }
 
 void Control::task_impl() {
+    //initialization of Humidifier, GPIO 16 set as PWM, frequency 109 khz (LC resonance with piezo frequency), duty 50%.
+    uint pwm_pin = 16;
+    uint frequency = 109000;
+    float duty = 0.5;
+    Humidifier humidifier(pwm_pin,frequency,duty);
+
+    int count = 0;
+
     //test structure where Control sends a number to both UI and Network
     TickType_t lastWakeTime = xTaskGetTickCount();
     Message send_numbers{};
@@ -37,6 +47,19 @@ void Control::task_impl() {
             }
 
         }
+
+        //now the humidifier turns on for 5s for 15 times, later on can be used with H&T temperature.
+        if (count <= 15){
+            humidifier.humidifier_on();
+            printf("Humidifier on for 5s\n");
+            //turn on the humidifier for 5s just for testing
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            humidifier.humidifier_off();
+            printf("Humidifier off \n");
+            count++;
+        }
+
         vTaskDelayUntil(&lastWakeTime, period);
     }
 }
+
