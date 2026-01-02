@@ -3,6 +3,7 @@
 #include "Structs.h"
 #include "PWM/PWM.h"
 #include "Humidifier/Humidifier.h"
+#include "Dehumidifier/Dehumidifier.h"
 
 Control::Control(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
@@ -19,11 +20,11 @@ void Control::task_wrap(void *pvParameters) {
 }
 
 void Control::task_impl() {
-    //initialization of Humidifier, GPIO 16 set as PWM, frequency 109 khz (LC resonance with piezo frequency), duty 50%.
-    uint pwm_pin = 16;
-    uint frequency = 109000;
-    float duty = 0.5;
-    Humidifier humidifier(pwm_pin,frequency,duty);
+    //initialization of Humidifier
+    Humidifier humidifier(HUMIDIFIER_PIN,HUMIDIFIER_FREQUENCY,HUMIDIFIER_DUTY);
+
+    //initialization of Dehumidifier
+    Dehumidifier dehumidifier(DEHUMIDIFIER_PIN);
 
     int count = 0;
 
@@ -56,6 +57,11 @@ void Control::task_impl() {
             vTaskDelay(pdMS_TO_TICKS(5000));
             humidifier.humidifier_off();
             printf("Humidifier off \n");
+            dehumidifier.dehum_on();
+            printf("Dehumidifier on for 5s\n");
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            dehumidifier.dehum_off();
+            printf("Dehumidifier off \n");
             count++;
         }
 
