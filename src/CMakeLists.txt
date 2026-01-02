@@ -47,6 +47,8 @@ add_executable(${ProjectName}
         PWM/PWM.cpp
         Humidifier/Humidifier.h
         Humidifier/Humidifier.cpp
+        Dehumidifier/Dehumidifier.h
+        Dehumidifier/Dehumidifier.cpp
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
