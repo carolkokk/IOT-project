@@ -41,7 +41,12 @@ add_executable(${ProjectName}
         Task_UI/UI.h
         Task_Network/Network.cpp
         Task_Network/Network.h
-
+        GPIO/GPIO.h
+        GPIO/GPIO.cpp
+        PWM/PWM.h
+        PWM/PWM.cpp
+        Humidifier/Humidifier.h
+        Humidifier/Humidifier.cpp
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
@@ -70,7 +75,7 @@ target_link_libraries(${ProjectName}
         pico_cyw43_arch_lwip_sys_freertos
         pico_lwip_mbedtls
         pico_mbedtls
-
+        hardware_pwm
 )
 
 # Ignore warnings from lwip code
