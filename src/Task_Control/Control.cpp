@@ -57,6 +57,7 @@ void Control::task_impl() {
             vTaskDelay(pdMS_TO_TICKS(5000));
             humidifier.humidifier_off();
             printf("Humidifier off \n");
+            //turn on the dehumidifier for 5s just for testing
             dehumidifier.dehum_on();
             printf("Dehumidifier on for 5s\n");
             vTaskDelay(pdMS_TO_TICKS(5000));
