@@ -1,6 +1,9 @@
 #include "Control.h"
 #include <cstdio>
 #include "Structs.h"
+#include "PWM/PWM.h"
+#include "Humidifier/Humidifier.h"
+#include "Dehumidifier/Dehumidifier.h"
 
 Control::Control(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
@@ -17,6 +20,14 @@ void Control::task_wrap(void *pvParameters) {
 }
 
 void Control::task_impl() {
+    //initialization of Humidifier
+    Humidifier humidifier(HUMIDIFIER_PIN,HUMIDIFIER_FREQUENCY,HUMIDIFIER_DUTY);
+
+    //initialization of Dehumidifier
+    Dehumidifier dehumidifier(DEHUMIDIFIER_PIN);
+
+    int count = 0;
+
     //test structure where Control sends a number to both UI and Network
     TickType_t lastWakeTime = xTaskGetTickCount();
     Message send_numbers{};
@@ -38,10 +49,30 @@ void Control::task_impl() {
             {
                 printf("received %u\n",received.number);
             }
+
         }
 
         printf("T: %.2f C\n", temp_rh.read_temp());
         printf("RH: %.2f %%\n", temp_rh.read_rh());
+
+        //now the humidifier turns on for 5s for 15 times, later on can be used with H&T temperature.
+        if (count <= 15){
+            humidifier.humidifier_on();
+            printf("Humidifier on for 5s\n");
+            //turn on the humidifier for 5s just for testing
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            humidifier.humidifier_off();
+            printf("Humidifier off \n");
+            //turn on the dehumidifier for 5s just for testing
+            dehumidifier.dehum_on();
+            printf("Dehumidifier on for 5s\n");
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            dehumidifier.dehum_off();
+            printf("Dehumidifier off \n");
+            count++;
+        }
+
         vTaskDelayUntil(&lastWakeTime, period);
     }
 }
+
