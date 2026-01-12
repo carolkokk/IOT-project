@@ -19,6 +19,11 @@ add_executable(${ProjectName}
         uart/PicoOsUart.cpp
         uart/PicoOsUart.h
 
+        spi/PicoSPIBus.cpp
+        spi/PicoSPIBus.h
+        spi/PicoSPIDevice.cpp
+        spi/PicoSPIDevice.h
+
         modbus/nanomodbus.h
         modbus/nanomodbus.c
         modbus/ModbusRegister.cpp
@@ -30,10 +35,16 @@ add_executable(${ProjectName}
         display/framebuf.h
         display/mono_vlsb.cpp
         display/mono_vlsb.h
-#        display/ssd1306.cpp
-#        display/ssd1306.h
-        display/ssd1306os.h
-        display/ssd1306os.cpp
+        display/rgb_palette.cpp
+        display/rgb_palette.h
+        display/ili9341nobuf.h
+        display/ili9341nobuf.cpp
+        display/mono_vlsb.cpp
+        display/mono_vlsb.h
+        display/mono_horiz.cpp
+        display/mono_horiz.h
+        display/spi_device.h
+        display/font_petme128_8x8.h
 
         Task_Control/Control.cpp
         Task_Control/Control.h
@@ -49,6 +60,11 @@ add_executable(${ProjectName}
         Humidifier/Humidifier.cpp
         Dehumidifier/Dehumidifier.h
         Dehumidifier/Dehumidifier.cpp
+        Temp_Rh/BME680.cpp
+        Temp_Rh/BME680.h
+        Temp_Rh/BME680_wrapper.cpp
+        Temp_Rh/BME680_wrapper.h
+        Temp_Rh/BME68x_SensorAPI/bme68x.c
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
@@ -59,6 +75,7 @@ target_include_directories(${ProjectName} PRIVATE
         modbus
         uart
         i2c
+        spi
         display
         ipstack
 )
@@ -78,6 +95,7 @@ target_link_libraries(${ProjectName}
         pico_lwip_mbedtls
         pico_mbedtls
         hardware_pwm
+        hardware_spi
 )
 
 # Ignore warnings from lwip code
@@ -90,5 +108,5 @@ set_source_files_properties(
 pico_add_extra_outputs(${ProjectName})
 
 # Disable usb output, enable uart output
-pico_enable_stdio_usb(${PROJECT_NAME} 0)
-pico_enable_stdio_uart(${PROJECT_NAME} 1)
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)

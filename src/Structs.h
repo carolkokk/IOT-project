@@ -13,7 +13,8 @@
 //simple examples for testing
 enum MessageType{
     TEST_NUMBER,
-    TEST_STRING
+    TEST_STRING,
+    TEMP_RH,
 };
 
 //combine message type and data
@@ -22,6 +23,8 @@ struct Message{
 
     uint8_t number;
     char string[64];
+    double temp;
+    double rh;
 };
 
 

@@ -26,6 +26,10 @@ void Control::task_impl() {
     //initialization of Dehumidifier
     Dehumidifier dehumidifier(DEHUMIDIFIER_PIN);
 
+    //temperature and humidity sensor
+    auto i2cbus0 = std::make_shared<PicoI2C>(0, 100000);
+    BME680 rh_sensor(i2cbus0, 0x76);
+
     int count = 0;
 
     //test structure where Control sends a number to both UI and Network
@@ -35,11 +39,12 @@ void Control::task_impl() {
     send_numbers.number = 0;
     Message received{};
 
-    auto i2cbus0 = std::make_shared<PicoI2C>(0, 100000);
-    BME680 temp_rh(i2cbus0, 0x76);
+    //testing temp sensor data communication to UI
+    Message temp_rh{};
+    temp_rh.type = TEMP_RH;
 
     while(true) {
-        xQueueSendToBack(to_UI, &send_numbers, portMAX_DELAY);
+        //xQueueSendToBack(to_UI, &send_numbers, portMAX_DELAY);
         xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
 
         while (xQueueReceive(to_Control,&received,pdMS_TO_TICKS(10))) {
@@ -49,11 +54,14 @@ void Control::task_impl() {
             {
                 printf("received %u\n",received.number);
             }
-
         }
 
-        printf("T: %.2f C\n", temp_rh.read_temp());
-        printf("RH: %.2f %%\n", temp_rh.read_rh());
+        //printf("T: %.2f C\n", rh_sensor.read_temp());
+        //printf("RH: %.2f %%\n", rh_sensor.read_rh());
+        temp_rh.temp = rh_sensor.read_temp();
+        temp_rh.rh = rh_sensor.read_rh();
+        xQueueSendToBack(to_UI, &temp_rh, portMAX_DELAY);
+
 
         //now the humidifier turns on for 5s for 15 times, later on can be used with H&T temperature.
         if (count <= 15){

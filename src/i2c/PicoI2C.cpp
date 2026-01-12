@@ -11,8 +11,8 @@
 #include "Syslog.h"
 #endif
 
-#define I2C0_SDA_PIN 20
-#define I2C0_SCL_PIN 21
+#define I2C0_SDA_PIN 0
+#define I2C0_SCL_PIN 1
 
 #define I2C1_SDA_PIN 14
 #define I2C1_SCL_PIN 15
