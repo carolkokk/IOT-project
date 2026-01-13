@@ -71,6 +71,7 @@ target_compile_features(${ProjectName} PRIVATE cxx_std_17)
 
 
 target_include_directories(${ProjectName} PRIVATE
+    #${CMAKE_SOURCE_DIR}
     ${CMAKE_CURRENT_LIST_DIR}
         modbus
         uart
@@ -96,6 +97,7 @@ target_link_libraries(${ProjectName}
         pico_mbedtls
         hardware_pwm
         hardware_spi
+        #lvgl
 )
 
 # Ignore warnings from lwip code

@@ -71,10 +71,10 @@ void UI::task_impl() {
                 display.fill(0x0000);
                 // show temp
                 display.text("T: ", 70, 100, 0xFFFF);
-                display.text(temp, 120, 100, 0xFFE0);
+                display.text(temp, 120, 100, 0x001F);
                 // show humidity
                 display.text("RH: ", 70, 130, 0xFFFF);
-                display.text(rh, 120, 130, 0xFFE0);
+                display.text(rh, 120, 130, 0x001F);
                 display.show();
             }
         }
