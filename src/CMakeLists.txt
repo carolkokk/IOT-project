@@ -31,20 +31,11 @@ add_executable(${ProjectName}
         modbus/ModbusClient.cpp
         modbus/ModbusClient.h
 
-        display/framebuf.cpp
-        display/framebuf.h
-        display/mono_vlsb.cpp
-        display/mono_vlsb.h
-        display/rgb_palette.cpp
-        display/rgb_palette.h
-        display/ili9341nobuf.h
-        display/ili9341nobuf.cpp
-        display/mono_vlsb.cpp
-        display/mono_vlsb.h
-        display/mono_horiz.cpp
-        display/mono_horiz.h
         display/spi_device.h
-        display/font_petme128_8x8.h
+        display/ili9341.h
+        display/ili9341.cpp
+        display/lvgl_port.h
+        display/lvgl_port.h
 
         Task_Control/Control.cpp
         Task_Control/Control.h
@@ -65,6 +56,10 @@ add_executable(${ProjectName}
         Temp_Rh/BME680_wrapper.cpp
         Temp_Rh/BME680_wrapper.h
         Temp_Rh/BME68x_SensorAPI/bme68x.c
+        display/ili9341.cpp
+        display/ili9341.h
+        display/lvgl_port.cpp
+        display/lvgl_port.h
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
@@ -97,7 +92,7 @@ target_link_libraries(${ProjectName}
         pico_mbedtls
         hardware_pwm
         hardware_spi
-        #lvgl
+        lvgl
 )
 
 # Ignore warnings from lwip code

@@ -6,17 +6,26 @@
 #include <sstream>
 #include <iomanip>
 
-#include "ili9341nobuf.h"
 #include "PicoSPIBus.h"
 #include "PicoSPIDevice.h"
-#include "rgb_palette.h"
-#include "fonts/FreeMono12pt7b.h"
+
+extern LVGLPort *g_lvgl_port;
 
 UI::UI(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
     uint32_t stack_size,
     UBaseType_t priority) :
     to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),period(period){
+
+    auto spi = std::make_shared<PicoSPIBus>(0, 6, 7, 4);
+    auto dev = std::make_shared<PicoSPIDevice>(spi, 9);
+    display = std::make_shared<ili9341>(dev, 10, 11, 13, 240, 320, 3);
+
+    // creating and initializing lvgl port
+    lvgl_port = std::make_shared<LVGLPort>(display);
+    lvgl_port->init();
+    // setting global ptr for timer callb
+    g_lvgl_port = lvgl_port.get();
 
     xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr);
 }
@@ -27,15 +36,24 @@ void UI::task_wrap(void *pvParameters) {
 }
 
 void UI::task_impl() {
+    // lvgl elements:
 
-    // init of the display
-    auto spi = std::make_shared<PicoSPIBus>(0, 6, 7, 8);
-    auto dev = std::make_shared<PicoSPIDevice>(spi, 9);
-    ili9341nobuf display(dev, 10, 11);
+    // black background
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_white(), 0);
 
-    display.fill(0x0000);
-    display.show();
-    display.setfont(&FreeMono12pt7b);
+    // humidity label
+    rh_label = lv_label_create(lv_screen_active());
+    lv_label_set_text(rh_label, "RH:   --");
+    lv_obj_set_pos(rh_label, 10, 20);
+    lv_obj_set_style_text_color(rh_label, lv_color_black(), 0);
+    lv_obj_set_style_text_font(rh_label, &lv_font_montserrat_24, 0);
+
+    // temperature label
+    temp_label = lv_label_create(lv_screen_active());
+    lv_label_set_text(temp_label, "T:   --");
+    lv_obj_set_pos(temp_label, 33, 60);
+    lv_obj_set_style_text_color(temp_label, lv_color_black(), 0);
+    lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_24, 0);
 
     //test structure where UI sends a message to both Network and control
     TickType_t lastWakeTime = xTaskGetTickCount();
@@ -61,23 +79,18 @@ void UI::task_impl() {
                 printf("UI received TEMP: %.2f\n", received.temp);
                 printf("UI received RH: %.2f\n", received.rh);
 
-                std::ostringstream temp_stream, rh_stream;
-                temp_stream << std::fixed << std::setprecision(2) << received.temp;
-                rh_stream << std::fixed << std::setprecision(2) << received.rh;
+                // update labels with new data
+                char buf[64];
+                snprintf(buf, sizeof(buf), "RH:   %.2f %%", received.rh);
+                lv_label_set_text(rh_label, buf);
 
-                std::string temp = temp_stream.str();
-                std::string rh = rh_stream.str();
+                snprintf(buf, sizeof(buf), "T:   %.2f C", received.temp);
+                lv_label_set_text(temp_label, buf);
 
-                display.fill(0x0000);
-                // show temp
-                display.text("T: ", 70, 100, 0xFFFF);
-                display.text(temp, 120, 100, 0x001F);
-                // show humidity
-                display.text("RH: ", 70, 130, 0xFFFF);
-                display.text(rh, 120, 130, 0x001F);
-                display.show();
             }
         }
+        lv_timer_handler();
+
         vTaskDelayUntil(&lastWakeTime, period);
     }
 }

@@ -91,10 +91,10 @@ static const uint8_t ili9341_init[] = {
       0x00, 0x00,
 
     ILI9341_POWER1, 1,
-      0x26,             // VRH[5:0]
+      0x26,
 
     ILI9341_POWER2, 1,
-      0x11,             // SAP[2:0];BT[3:0]
+      0x11,
 
     ILI9341_VCOM1, 2,
       0x35, 0x3E,

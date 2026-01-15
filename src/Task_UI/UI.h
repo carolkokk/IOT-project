@@ -4,11 +4,14 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include "task.h"
+#include <memory>
+#include "display/lvgl_port.h"
+#include "display/ili9341.h"
 
 
 class UI {
 public:
-    UI(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period, uint32_t stack_size = 1024, UBaseType_t priority = tskIDLE_PRIORITY + 2);
+    UI(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period, uint32_t stack_size = 4096, UBaseType_t priority = tskIDLE_PRIORITY + 2);
     static void task_wrap(void *pvParameters);
 
 private:
@@ -18,6 +21,14 @@ private:
     QueueHandle_t to_Network;
     QueueHandle_t to_Control;
     TickType_t period;
+
+    std::shared_ptr<ili9341> display;
+    std::shared_ptr<LVGLPort> lvgl_port;
+
+    // lvgl UI elements
+    lv_obj_t *temp_label;
+    lv_obj_t *rh_label;
+
 };
 
 #endif //UI_H
