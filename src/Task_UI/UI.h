@@ -5,8 +5,11 @@
 #include "semphr.h"
 #include "task.h"
 #include <memory>
+
+#include "LVGLTouch.h"
 #include "display/lvgl_port.h"
 #include "display/ili9341.h"
+#include "display/XPT2046_Touch.h"
 
 
 class UI {
@@ -22,8 +25,14 @@ private:
     QueueHandle_t to_Control;
     TickType_t period;
 
+    std::shared_ptr<PicoSPIBus> spi_0;
+    std::shared_ptr<PicoSPIBus> spi_1;
+    std::shared_ptr<PicoSPIDevice> display_device;
+    std::shared_ptr<PicoSPIDevice> touch_device;
     std::shared_ptr<ili9341> display;
     std::shared_ptr<LVGLPort> lvgl_port;
+    std::shared_ptr<XPT2046_Touch> touch;
+    std::shared_ptr<LVGLTouch> lvgl_touch;
 
     // lvgl UI elements
     lv_obj_t *temp_label;

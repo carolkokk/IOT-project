@@ -23,11 +23,10 @@ public:
 
     explicit PicoSPIBus(unsigned int bus_nr, unsigned int clk_pin, unsigned int dout_pin,
                         unsigned int din_pin = PicoSPIBus::not_used, SPI_config cfg = {
-                            8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST, 30000000
-                        }); // 30MHz speed for ili9341
+                            8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST, 1000000
+                        });
 
     PicoSPIBus(const PicoSPIBus &) = delete;
-
     unsigned int write(const uint8_t *buffer, unsigned int length);
 
     unsigned int read(uint8_t *buffer, unsigned int length);

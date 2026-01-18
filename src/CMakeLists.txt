@@ -60,6 +60,10 @@ add_executable(${ProjectName}
         display/ili9341.h
         display/lvgl_port.cpp
         display/lvgl_port.h
+        display/XPT2046_Touch.cpp
+        display/XPT2046_Touch.h
+        display/LVGLTouch.cpp
+        display/LVGLTouch.h
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)

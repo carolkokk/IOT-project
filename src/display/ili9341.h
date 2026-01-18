@@ -24,8 +24,8 @@ class ili9341 {
         void draw_pixels(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, const uint8_t *data, size_t len);
 
 
-        //uint16_t width() const { return _width; }
-        //uint16_t height() const { return _height; }
+        uint16_t get_width() const { return width; }
+        uint16_t get_height() const { return height; }
 
     private:
         void init(const uint8_t *addr);
