@@ -5,6 +5,7 @@
 #include "semphr.h"
 #include "task.h"
 #include <memory>
+#include "Structs.h"
 
 #include "LVGLTouch.h"
 #include "display/lvgl_port.h"
@@ -34,10 +35,15 @@ private:
     std::shared_ptr<XPT2046_Touch> touch;
     std::shared_ptr<LVGLTouch> lvgl_touch;
 
+    // functions for loading different UI screens
+    void load_main_screen(Message received, bool initial);
+
     // lvgl UI elements
     lv_obj_t *temp_label;
     lv_obj_t *rh_label;
-
+    lv_obj_t *dropdown;
+    lv_obj_t *tank_label;
+    lv_obj_t *network_label;
 };
 
 #endif //UI_H

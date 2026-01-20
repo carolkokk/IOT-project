@@ -62,25 +62,24 @@ void Control::task_impl() {
         temp_rh.rh = rh_sensor.read_rh();
         xQueueSendToBack(to_UI, &temp_rh, portMAX_DELAY);
 
-
         //now the humidifier turns on for 5s for 15 times, later on can be used with H&T temperature.
-        if (count <= 15){
+        if (temp_rh.rh <= 27) {
+            dehumidifier.dehum_off();
             humidifier.humidifier_on();
-            printf("Humidifier on for 5s\n");
+            printf("Humidifier on\n");
             //turn on the humidifier for 5s just for testing
             vTaskDelay(pdMS_TO_TICKS(5000));
+        } else {
             humidifier.humidifier_off();
             printf("Humidifier off \n");
             //turn on the dehumidifier for 5s just for testing
             dehumidifier.dehum_on();
-            printf("Dehumidifier on for 5s\n");
+            printf("Dehumidifier on\n");
             vTaskDelay(pdMS_TO_TICKS(5000));
-            dehumidifier.dehum_off();
-            printf("Dehumidifier off \n");
-            count++;
+            //dehumidifier.dehum_off();
+            //printf("Dehumidifier off \n");
+            //count++;
         }
-
         vTaskDelayUntil(&lastWakeTime, period);
     }
 }
-

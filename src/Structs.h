@@ -23,8 +23,8 @@ struct Message{
 
     uint8_t number;
     char string[64];
-    double temp;
-    double rh;
+    double temp = 0.0;
+    double rh = 0.0;
 };
 
 
