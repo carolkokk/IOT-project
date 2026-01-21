@@ -8,39 +8,10 @@
 #define Z_THRESHOLD_INT	75
 #define MS_THRESHOLD  3
 
-XPT2046_Touch* XPT2046_Touch::isr_instance = nullptr;
-
-XPT2046_Touch::XPT2046_Touch(PicoSPIDevice *spi_device, uint8_t t_irq)
-                            :spi_dev(spi_device), t_irq(t_irq),
+XPT2046_Touch::XPT2046_Touch(PicoSPIDevice *spi_device)
+                            :spi_dev(spi_device),
                             rotation(3),
-                            xraw(0), yraw(0), zraw(0), msraw(0x80000000),
-                            isrWake(t_irq == 255) {
-}
-
-/*XPT2046_Touch::~XPT2046_Touch() {
-    //disabling irq pin
-    if (t_irq != 255) {
-        gpio_set_irq_enabled(t_irq, GPIO_IRQ_EDGE_FALL, false);
-    }
-}*/
-
-bool XPT2046_Touch::begin() {
-    // enabling irq
-    if (t_irq != 255) {
-        gpio_init(t_irq);
-        gpio_set_dir(t_irq, GPIO_IN);
-        gpio_pull_up(t_irq);
-
-        isr_instance = this;
-        gpio_set_irq_enabled_with_callback(t_irq, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
-    }
-    return true;
-}
-
-void XPT2046_Touch::gpio_irq_callback(uint gpio, uint32_t events) {
-    if (isr_instance) {
-        isr_instance->isrWake = true;
-    }
+                            xraw(0), yraw(0), zraw(0), msraw(0x80000000) {
 }
 
 TS_Point XPT2046_Touch::getPoint() {
@@ -81,7 +52,7 @@ int16_t XPT2046_Touch::bestTwoAvg(uint16_t x, uint16_t y, uint16_t z) {
 void XPT2046_Touch::update() {
     int16_t data[6];
 
-    if (!isrWake) return;
+    //if (!isrWake) return;
 
     uint32_t now = to_ms_since_boot(get_absolute_time());
     if (now - msraw < MS_THRESHOLD) return;
@@ -148,9 +119,9 @@ void XPT2046_Touch::update() {
     if (z < 0) z = 0;
     if (z < Z_THRESHOLD) {
         zraw = 0;
-        if (z < Z_THRESHOLD_INT) {
+        /*if (z < Z_THRESHOLD_INT) {
             if (t_irq != 255) isrWake = false;
-        }
+        }*/
         return;
     }
     zraw = z;

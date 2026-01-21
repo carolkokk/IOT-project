@@ -19,7 +19,7 @@ extern LVGLPort *g_lvgl_port;
 #define TOUCH_Y_MIN 275
 #define TOUCH_Y_MAX 3890
 
-#define TOUCH_ENABLE 0
+#define TOUCH_ENABLE 1
 
 UI::UI(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
@@ -29,11 +29,11 @@ UI::UI(
 
     // spi device initialization
     // for display, 30MH is used, so a different bus
-    spi_0 = std::make_shared<PicoSPIBus>(0, 6, 7, 8, PicoSPIBus::SPI_config {8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST, 30000000});
+    spi_0 = std::make_shared<PicoSPIBus>(0, 6, 7, 4, PicoSPIBus::SPI_config {8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST, 30000000});
     display_device = std::make_shared<PicoSPIDevice>(spi_0, 9);
 
     //specific device initialization with dedicated pins
-    display = std::make_shared<ili9341>(display_device, 10, 11, UINT_MAX, 240, 320, 3);
+    display = std::make_shared<ili9341>(display_device, 10, 11, 5, 240, 320, 3);
 
     // creating and initializing lvgl port
     lvgl_port = std::make_shared<LVGLPort>(display);
@@ -48,8 +48,8 @@ UI::UI(
     touch_device = std::make_shared<PicoSPIDevice>(spi_1, 13);
 
     // irq is enabled and rotation is set for touch
-    touch = std::make_shared<XPT2046_Touch>(touch_device.get(), 255);
-    touch->begin();
+    touch = std::make_shared<XPT2046_Touch>(touch_device.get());
+    //touch->begin();
     touch->setRotation(3);
 
     //touch integration for lvgl
@@ -69,26 +69,8 @@ void UI::task_wrap(void *pvParameters) {
 }
 
 void UI::task_impl() {
-    // lvgl elements:
-
     // black background
-    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
-
-    /*
-    // test button to see if all works
-    lv_obj_t* btn = lv_button_create(lv_screen_active());
-    lv_obj_set_size(btn, 120, 50);
-    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 100);
-
-    lv_obj_t *btn_label = lv_label_create(btn);
-    lv_label_set_text(btn_label, "Touch Me!");
-    lv_obj_center(btn_label);
-    */
-    /*
-    lv_obj_add_event_cb(btn, [](lv_event_t* e) {
-        printf("BUTTON CLICKED!\n");
-    }, LV_EVENT_CLICKED, nullptr);
-    */
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x414445), 0);
 
     //test structure where UI sends a message to both Network and control
     TickType_t lastWakeTime = xTaskGetTickCount();
@@ -129,16 +111,23 @@ void UI::load_main_screen(Message received, bool initial) {
     char buf[64];
 
     if (initial) {
+        // a white rectangle for the background of displaying sensor info
+        lv_obj_t *white_bck = lv_obj_create(lv_screen_active());
+        lv_obj_set_size(white_bck, 170, 90);
+        lv_obj_set_pos(white_bck, 5, 10);
+        lv_obj_set_style_bg_color(white_bck, lv_color_white(), 0);
+        lv_obj_set_style_arc_rounded(white_bck, 10, 0);
+
         // humidity label
         rh_label = lv_label_create(lv_screen_active());
         lv_obj_set_pos(rh_label, 10, 20);
-        lv_obj_set_style_text_color(rh_label, lv_color_white(), 0);
+        lv_obj_set_style_text_color(rh_label, lv_color_black(), 0);
         lv_obj_set_style_text_font(rh_label, &lv_font_montserrat_24, 0);
 
         // temperature label
         temp_label = lv_label_create(lv_screen_active());
         lv_obj_set_pos(temp_label, 33, 60);
-        lv_obj_set_style_text_color(temp_label, lv_color_white(), 0);
+        lv_obj_set_style_text_color(temp_label, lv_color_black(), 0);
         lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_24, 0);
 
         // dropdown menu test
@@ -149,6 +138,7 @@ void UI::load_main_screen(Message received, bool initial) {
         lv_obj_t* dd = lv_dropdown_create(lv_screen_active());
         lv_dropdown_set_options_static(dd, options);
         lv_obj_align(dd, LV_ALIGN_BOTTOM_RIGHT, -20, -10);
+        lv_obj_set_style_bg_color(dd, lv_color_hex(0x8fa4b0), 0);
         lv_dropdown_set_dir(dd, LV_DIR_BOTTOM);
         lv_dropdown_set_text(dd, "Menu");
         lv_dropdown_set_symbol(dd, LV_SYMBOL_SETTINGS);

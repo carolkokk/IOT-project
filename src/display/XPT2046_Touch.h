@@ -23,10 +23,9 @@ class TS_Point {
 
 class XPT2046_Touch {
     public:
-        XPT2046_Touch(PicoSPIDevice* spi_device, uint8_t t_irq=255);
-        //~XPT2046_Touch();
+        XPT2046_Touch(PicoSPIDevice* spi_device);
 
-        bool begin();
+        //bool begin();
         TS_Point getPoint();
         bool touched();
         void readData(uint16_t* x, uint16_t* y, uint16_t* z);
@@ -38,20 +37,15 @@ class XPT2046_Touch {
         uint16_t getRawY() const { return yraw; }
         uint16_t getRawZ() const { return zraw; }
 
-        volatile bool isrWake = true;
-
     private:
         void update();
         static int16_t bestTwoAvg(uint16_t x, uint16_t y, uint16_t z);
 
         PicoSPIDevice* spi_dev;
-        uint8_t t_irq;
         uint8_t rotation;
         uint16_t xraw, yraw, zraw;
         uint32_t msraw;
 
-        static XPT2046_Touch* isr_instance;
-        static void gpio_irq_callback(uint gpio, uint32_t events);
 };
 
 
