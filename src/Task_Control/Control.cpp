@@ -54,6 +54,9 @@ void Control::task_impl() {
             {
                 printf("received %u\n",received.number);
             }
+            else if (received.type == TARGET_RH) {
+                printf("New target rh: %d\n", static_cast<uint8_t>(received.target_rh));
+            }
         }
 
         //printf("T: %.2f C\n", rh_sensor.read_temp());

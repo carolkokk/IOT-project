@@ -19,46 +19,13 @@ extern LVGLPort *g_lvgl_port;
 #define TOUCH_Y_MIN 275
 #define TOUCH_Y_MAX 3890
 
-#define TOUCH_ENABLE 1
-
 UI::UI(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
     uint32_t stack_size,
     UBaseType_t priority) :
     to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),period(period){
 
-    // spi device initialization
-    // for display, 30MH is used, so a different bus
-    spi_0 = std::make_shared<PicoSPIBus>(0, 6, 7, 4, PicoSPIBus::SPI_config {8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST, 30000000});
-    display_device = std::make_shared<PicoSPIDevice>(spi_0, 9);
-
-    //specific device initialization with dedicated pins
-    display = std::make_shared<ili9341>(display_device, 10, 11, 5, 240, 320, 3);
-
-    // creating and initializing lvgl port
-    lvgl_port = std::make_shared<LVGLPort>(display);
-    lvgl_port->init();
-    // setting global ptr for timer callb
-    g_lvgl_port = lvgl_port.get();
-
-#ifdef TOUCH_ENABLE
-    // for the touch detection, 1MH is used
-    spi_1 = std::make_shared<PicoSPIBus>(1, 14, 15, 12,
-                                        PicoSPIBus::SPI_config {8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST, 1000000});
-    touch_device = std::make_shared<PicoSPIDevice>(spi_1, 13);
-
-    // irq is enabled and rotation is set for touch
-    touch = std::make_shared<XPT2046_Touch>(touch_device.get());
-    //touch->begin();
-    touch->setRotation(3);
-
-    //touch integration for lvgl
-    lvgl_touch = std::make_shared<LVGLTouch>(touch.get(), 320, 240);
-    // setting touch with calibrated values
-    lvgl_touch->init();
-    lvgl_touch->setCalibration(TOUCH_X_MIN, TOUCH_X_MAX, TOUCH_Y_MIN, TOUCH_Y_MAX);
-
-#endif
+    init_UI();
 
     xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr);
 }
@@ -74,19 +41,24 @@ void UI::task_impl() {
 
     //test structure where UI sends a message to both Network and control
     TickType_t lastWakeTime = xTaskGetTickCount();
-    Message send_msg{};
+    Message send{};
     Message received{};
-    send_msg.type = TEST_STRING;
-    strncpy(send_msg.string, "Test string from UI task.", sizeof(send_msg.string)-1);
-    send_msg.string[sizeof(send_msg.string)-1] = '\0';
+    send.type = TEST_STRING;
+    strncpy(send.string, "Test string from UI task.", sizeof(send.string)-1);
+    send.string[sizeof(send.string)-1] = '\0';
 
-    load_main_screen(received, true);
+    current_screen = MAIN;
+    next_screen = MAIN;
+
+    sensor_data.temp = 0.0;
+    sensor_data.rh = 0.0;
+    //for testing initial value is a num
+    target_rh = 50;
+    sensor_data.type = TEMP_RH;
+
+    load_main_screen(sensor_data, true);
 
     while(true) {
-
-        //xQueueSendToBack(to_Control, &send_msg, portMAX_DELAY);
-        //xQueueSendToBack(to_Network, &send_msg, portMAX_DELAY);
-
         while (xQueueReceive(to_UI,&received,pdMS_TO_TICKS(10))) {
             /*if (received.type == TEST_STRING){
                 printf("received %s\n",received.string);
@@ -95,16 +67,96 @@ void UI::task_impl() {
                 printf("received %u\n",received.number);
             }*/
             if (received.type == TEMP_RH) {
-                load_main_screen(received, false);
+                sensor_data.type = TEMP_RH;
+                sensor_data.rh = received.rh;
+                sensor_data.temp = received.temp;
+                if (current_screen == MAIN) {
+                    load_main_screen(sensor_data, false);
+                }
                 printf("UI received TEMP: %.2f\n", received.temp);
                 printf("UI received RH: %.2f\n", received.rh);
             }
         }
         lv_timer_handler();
 
+        // check for flags
+        if (menu_selected) {
+            menu_selected = false;
+            switch (menu_selection) {
+                case 0:
+                    next_screen = SET_RH;
+                    break;
+                case 1:
+                    next_screen = SET_NETWORK;
+                    break;
+            }
+        }
+
+        if (slider_val_saved) {
+            slider_val_saved = false;
+            target_rh = slider_value;
+            // send new target rh value to queues
+            Message msg{};
+            msg.type = TARGET_RH;
+            msg.target_rh = target_rh;
+            xQueueSendToBack(to_Control, &msg, portMAX_DELAY);
+            xQueueSend(to_Network, &msg, portMAX_DELAY);
+
+            next_screen = MAIN;
+        }
+
+        if (current_screen != next_screen) {
+            current_screen = next_screen;
+
+            // cleans up current screen and sets blck background again before displayinf new screen
+            lv_obj_clean(lv_screen_active());
+            lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x414445), 0);
+
+            switch (current_screen) {
+                case MAIN:
+                    load_main_screen(sensor_data, true);
+                    break;
+                case SET_RH:
+                    load_rh_set_screen();
+                    break;
+            }
+        }
         vTaskDelayUntil(&lastWakeTime, period);
     }
 }
+
+void UI::init_UI() {
+    // spi device initialization
+    // for display, 30MH is used, so a different bus
+    spi_0 = std::make_shared<PicoSPIBus>(0, 6, 7, 4, PicoSPIBus::SPI_config {8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST, 30000000});
+    display_device = std::make_shared<PicoSPIDevice>(spi_0, 9);
+
+    //specific device initialization with dedicated pins
+    display = std::make_shared<ili9341>(display_device, 10, 11, 5, 240, 320, 3);
+
+    // creating and initializing lvgl port
+    lvgl_port = std::make_shared<LVGLPort>(display);
+    lvgl_port->init();
+    // setting global ptr for timer callb
+    g_lvgl_port = lvgl_port.get();
+
+    // for the touch detection, 1MH is used
+    spi_1 = std::make_shared<PicoSPIBus>(1, 14, 15, 12,
+                                        PicoSPIBus::SPI_config {8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST, 1000000});
+    touch_device = std::make_shared<PicoSPIDevice>(spi_1, 13);
+
+    // irq is enabled and rotation is set for touch
+    touch = std::make_shared<XPT2046_Touch>(touch_device.get());
+    //touch->begin();
+    touch->setRotation(3);
+
+    //touch integration for lvgl
+    lvgl_touch = std::make_shared<LVGLTouch>(touch.get(), 320, 240);
+    // setting touch with calibrated values
+    lvgl_touch->init();
+    lvgl_touch->setCalibration(TOUCH_X_MIN, TOUCH_X_MAX, TOUCH_Y_MIN, TOUCH_Y_MAX);
+}
+
 
 void UI::load_main_screen(Message received, bool initial) {
     //buffer for updating sensor data
@@ -145,6 +197,9 @@ void UI::load_main_screen(Message received, bool initial) {
         lv_label_set_text(rh_label, "RH:   --");
         lv_label_set_text(temp_label, "T:   --");
 
+        //adding callback to react to different menu selection items
+       lv_obj_add_event_cb(dd, dd_menu_callback, LV_EVENT_VALUE_CHANGED, this);
+
         // creating led for indicating water tank
         /*
         led  = lv_led_create(lv_screen_active());
@@ -173,3 +228,62 @@ void UI::load_main_screen(Message received, bool initial) {
     }
 }
 
+void UI::dd_menu_callback(lv_event_t* e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+
+    lv_obj_t* dd = lv_event_get_target_obj(e);
+
+    ui->menu_selection = lv_dropdown_get_selected(dd);
+    ui->menu_selected = true;
+}
+
+void UI::load_rh_set_screen() {
+    printf("DEBUG: target_rh = %d (0x%08x)\n", target_rh, target_rh);
+    // creating slider for adjusting the target humidity value
+    lv_obj_t* slider = lv_slider_create(lv_screen_active());
+    lv_obj_align(slider, LV_ALIGN_TOP_MID, 0, 50);
+
+    lv_obj_add_event_cb(slider, slider_event_cb, LV_EVENT_VALUE_CHANGED, this);
+
+    lv_slider_set_range(slider, 35, 60);
+    lv_slider_set_value(slider, target_rh, LV_ANIM_OFF);
+
+    lv_obj_set_style_anim_duration(slider, 1000, 0);
+    slider_label = lv_label_create(lv_screen_active());
+    lv_obj_set_style_text_color(slider_label, lv_color_white(), 0);
+
+    //showing the current set rh as slider initial value
+    char buf[8];
+    lv_snprintf(buf, sizeof(buf), "%d%%", static_cast<int>(target_rh));
+
+    lv_label_set_text(slider_label, buf);
+
+    lv_obj_align_to(slider_label, slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+
+    // button to save the new set rh
+    lv_obj_t* btn = lv_button_create(lv_screen_active());
+    lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 80);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x8fa4b0), 0);
+
+    lv_obj_t* btn_label = lv_label_create(btn);
+    lv_label_set_text(btn_label, "SAVE");
+    lv_obj_center(btn);
+}
+
+void UI::slider_event_cb(lv_event_t* e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    lv_obj_t* slider = lv_event_get_target_obj(e);
+
+    ui->slider_value = (uint8_t)lv_slider_get_value(slider);
+
+    char buf[8];
+    lv_snprintf(buf, sizeof(buf), "%d%%", ui->slider_value);
+    lv_label_set_text(ui->slider_label, buf);
+    lv_obj_align_to(ui->slider_label, slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+}
+
+void UI::btn_event_cb(lv_event_t* e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    ui->slider_val_saved = true;
+}
