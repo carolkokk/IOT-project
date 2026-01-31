@@ -16,6 +16,7 @@ enum MessageType{
     TEST_NUMBER,
     TEST_STRING,
     TEMP_RH,
+    TARGET_RH,
 };
 
 //combine message type and data
@@ -26,6 +27,7 @@ struct Message{
     char string[64];
     double temp = 0.0;
     double rh = 0.0;
+    int32_t target_rh;
 };
 
 
