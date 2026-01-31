@@ -1,3 +1,6 @@
+
+file(GLOB MQTT_SOURCES "paho.mqtt.embedded-c/MQTTPacket/src/*.c")
+
 add_executable(${ProjectName}
         main.cpp
         critical_section.cpp
@@ -6,12 +9,20 @@ add_executable(${ProjectName}
         blinker.cpp
         blinker.h
 
-#        ipstack/IPStack.cpp
-#        ipstack/IPStack.h
-        ipstack/lwipopts.h
-        ipstack/tls_common.c
-        ipstack/picow_tls_client.c
-        ipstack/lwipopts_tls.h
+        mqtt/ipstack/IPStack.cpp
+        mqtt/ipstack/IPStack.h
+        mqtt/ipstack/lwipopts.h
+        mqtt/tls/tls_common.c
+        mqtt/tls/tls_common.h
+        mqtt/ipstack/lwipopts_tls.h
+        mqtt/tls/TlsClient.cpp
+        mqtt/tls/TlsClient.h
+
+        mqtt/ipstack/Countdown.cpp
+        mqtt/ipstack/Countdown.h
+        ${MQTT_SOURCES}
+        mqtt/mqttService/MQTTService.cpp
+        mqtt/mqttService/MQTTService.h
 
         i2c/PicoI2C.cpp
         i2c/PicoI2C.h
@@ -23,13 +34,6 @@ add_executable(${ProjectName}
         spi/PicoSPIBus.h
         spi/PicoSPIDevice.cpp
         spi/PicoSPIDevice.h
-
-        modbus/nanomodbus.h
-        modbus/nanomodbus.c
-        modbus/ModbusRegister.cpp
-        modbus/ModbusRegister.h
-        modbus/ModbusClient.cpp
-        modbus/ModbusClient.h
 
         display/spi_device.h
         display/ili9341.h
@@ -55,7 +59,6 @@ add_executable(${ProjectName}
         Temp_Rh/BME680.h
         Temp_Rh/BME680_wrapper.cpp
         Temp_Rh/BME680_wrapper.h
-        Temp_Rh/BME68x_SensorAPI/bme68x.c
         display/ili9341.cpp
         display/ili9341.h
         display/lvgl_port.cpp
@@ -77,12 +80,19 @@ target_include_directories(${ProjectName} PRIVATE
         i2c
         spi
         display
-        ipstack
+        mqtt
 )
 
+target_include_directories(${PROJECT_NAME} PRIVATE
+        mqtt
+        paho.mqtt.embedded-c/MQTTPacket/src
+        paho.mqtt.embedded-c/MQTTClient/src
+)
+
+
 target_compile_definitions(${ProjectName} PRIVATE
-        WIFI_SSID=\"$ENV{WIFI_SSID}\"
-        WIFI_PASSWORD=\"$ENV{WIFI_PASSWORD}\"
+        #WIFI_SSID=\"$ENV{WIFI_SSID}\"
+        #WIFI_PASSWORD=\"$ENV{WIFI_PASSWORD}\"
         NO_SYS=0            # don't want NO_SYS (generally this would be in your lwipopts.h)
         PICO_CYW43_ARCH_DEFAULT_COUNTRY_CODE=CYW43_COUNTRY_FINLAND
 )
@@ -108,6 +118,6 @@ set_source_files_properties(
 
 pico_add_extra_outputs(${ProjectName})
 
-# Disable usb output, enable uart output
+# Enable usb output, disable uart output
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
 pico_enable_stdio_uart(${PROJECT_NAME} 0)

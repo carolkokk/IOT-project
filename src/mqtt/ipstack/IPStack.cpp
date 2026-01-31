@@ -5,7 +5,9 @@
 #include "pico/time.h"
 
 #include "IPStack.h"
-
+#include "lwip/dns.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 // To remove Pico example debugging functions during refactoring
 //#define DEBUG_printf(x, ...) {}
@@ -13,35 +15,135 @@
 #define DUMP_BYTES(A, B) {}
 
 
-IPStack::IPStack(const char *ssid, const char *pw) : tcp_pcb{nullptr}, dropped{0}, count{0}, wr{0}, rd{0}, connected{false} {
-    if (cyw43_arch_init()) {
-        DEBUG_printf("failed to initialise\n");
-        return;
+IPStack::IPStack(TlsClient& tls, const uint8_t *cert, int timeout)
+    : tls_client(tls),cert(cert),timeout(timeout),wifi_connected{false} {}
+
+bool IPStack::connect_WiFi(const char* ssid, const char* password, int max_retries){
+    static bool initialized = false;
+
+    //initialization
+    if (!initialized) {
+        if (cyw43_arch_init()) {
+            DEBUG_printf("failed to initialize\n");
+            return false;
+        }
+        initialized = true;
+        cyw43_arch_enable_sta_mode();
     }
-    cyw43_arch_enable_sta_mode();
 
     DEBUG_printf("Connecting to Wi-Fi...\n");
-    if (cyw43_arch_wifi_connect_timeout_ms(ssid, pw, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
-        DEBUG_printf("Failed to connect.\n");
-    } else {
-        DEBUG_printf("Connected.\n");
+    for (int retry = 0; retry < max_retries; retry++){
+        if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
+            //try to connect to wifi
+            DEBUG_printf("Failed to connect WIFI.\n");
+            vTaskDelay(pdMS_TO_TICKS(2000));
+        } else {
+            DEBUG_printf("WIFI Connected.\n");
+
+            //make sure wifi is connected and ip address is assigned.
+            int linkup_try = 0;
+            while (cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) != CYW43_LINK_UP) {
+                vTaskDelay(pdMS_TO_TICKS(500));
+                linkup_try++;
+                if(linkup_try > 10){
+                    DEBUG_printf("Failed to get IP address.\n");
+                    return false;
+                }
+            }
+            //update wifi_connected information
+            wifi_connected = true;
+            return true;
+        }
     }
+    DEBUG_printf("All attempts failed to connect to wifi.\n");
+    wifi_connected = false;
+    return false;
+}
+
+//check if wifi connection is still on
+bool IPStack::WiFi_connected(){
+    int status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
+    if (status == CYW43_LINK_UP){
+        wifi_connected = true;
+    }else
+    {
+        wifi_connected = false;
+    }
+    return wifi_connected;
+};
+
+int IPStack::read(unsigned char *buffer, int len, int timeout)
+{
+    int i = tls_client.read_bytes(buffer,len,timeout);
+
+    return i;
+}
+
+int IPStack::write(unsigned char* buf, int len, int timeout)
+{
+
+    int i = tls_client.write_bytes(buf, len);
+    return i;
+}
+
+int IPStack::connect(const char *hostname, int port)
+{
+    //cyw43_arch_lwip lock inside
+    if (tls_client.tls_connect(hostname, cert, strlen((const char*)cert) + 1,timeout,port)){
+        return 0;
+    }
+    return -1;
+}
+
+int IPStack::disconnect(){
+    int i= tls_client.tls_close();
+    return i;
 
 }
 
-int IPStack::connect(uint32_t hostname, int port) {
+/*int IPStack::connect(uint32_t hostname, int port) {
     return ERR_ARG;
 }
 
 int IPStack::connect(const char *hostname, int port) {
     // check if the hostname requires DNS resolution
     if (!ip4addr_aton(hostname, &remote_addr)) {
-        // dns not implemented yet
-        return ERR_ARG;
+        // dns for converting domain to ip address
+        int entries = 0;
+        ip_addr_t resolved;
+        err_t err= ERR_VAL;
+
+        do{
+            cyw43_arch_lwip_begin();
+            err = dns_gethostbyname(hostname, &resolved,NULL,NULL);
+            cyw43_arch_lwip_end();
+
+            if(err == ERR_OK){
+                printf("DNS resolved\n");
+                remote_addr = resolved;
+                break;
+            }else if(err == ERR_INPROGRESS){
+                printf("DNS in progress\n");
+                entries++;
+                vTaskDelay(pdMS_TO_TICKS(500));
+            }else{
+                printf("DNS failed\n");
+                return err;
+            }
+        }while(entries < 5);
+
+        if(err != ERR_OK){
+            printf("DNS timeout\n");
+            return ERR_TIMEOUT;
+        }
+
     }
+
     // open a socket connection
     DEBUG_printf("Connecting to %s port %u\n", ip4addr_ntoa(&remote_addr), port);
+    cyw43_arch_lwip_begin();
     tcp_pcb = tcp_new_ip_type(IP_GET_TYPE(remote_addr));
+    cyw43_arch_lwip_end();
     if (!tcp_pcb) {
         DEBUG_printf("failed to create pcb\n");
         return ERR_MEM;
@@ -62,7 +164,7 @@ int IPStack::connect(const char *hostname, int port) {
     cyw43_arch_lwip_end();
 
     return err;
-}
+}*/
 
 /** Function prototype for tcp sent callback functions. Called when sent data has
  * been acknowledged by the remote side. Use it to free corresponding resources.
@@ -75,12 +177,12 @@ int IPStack::connect(const char *hostname, int port) {
  *            Only return ERR_ABRT if you have called tcp_abort from within the
  *            callback function!
  */
-err_t IPStack::tcp_client_sent(void *arg, struct tcp_pcb *tpcb, u16_t len) {
+/*err_t IPStack::tcp_client_sent(void *arg, struct tcp_pcb *tpcb, u16_t len) {
     //auto state = static_cast<IPStack *>(arg);
     DEBUG_printf("tcp_client_sent %u\n", len);
 
     return ERR_OK;
-}
+}*/
 
 /** Function prototype for tcp connected callback functions. Called when a pcb
  * is connected to the remote side after initiating a connection attempt by
@@ -94,7 +196,7 @@ err_t IPStack::tcp_client_sent(void *arg, struct tcp_pcb *tpcb, u16_t len) {
  *
  * @note When a connection attempt fails, the error callback is currently called!
  */
-err_t IPStack::tcp_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
+/*err_t IPStack::tcp_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
     auto state = static_cast<IPStack *>(arg);
     if (err != ERR_OK) {
         printf("connect failed %d\n", err);
@@ -102,7 +204,7 @@ err_t IPStack::tcp_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err) 
     state->connected = true;
 
     return ERR_OK;
-}
+}*/
 
 /** Function prototype for tcp poll callback functions. Called periodically as
  * specified by @see tcp_poll.
@@ -113,11 +215,11 @@ err_t IPStack::tcp_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err) 
  *            Only return ERR_ABRT if you have called tcp_abort from within the
  *            callback function!
  */
-err_t IPStack::tcp_client_poll(void *arg, struct tcp_pcb *tpcb) {
+/*err_t IPStack::tcp_client_poll(void *arg, struct tcp_pcb *tpcb) {
     //auto state = static_cast<IPStack *>(arg);
     DEBUG_printf("tcp_client_poll\n");
     return ERR_OK;
-}
+}*/
 
 /** Function prototype for tcp error callback functions. Called when the pcb
  * receives a RST or is unexpectedly closed for any other reason.
@@ -129,13 +231,13 @@ err_t IPStack::tcp_client_poll(void *arg, struct tcp_pcb *tpcb) {
  *            ERR_ABRT: aborted through tcp_abort or by a TCP timer
  *            ERR_RST: the connection was reset by the remote host
  */
-void IPStack::tcp_client_err(void *arg, err_t err) {
+/*void IPStack::tcp_client_err(void *arg, err_t err) {
     //auto state = static_cast<IPStack *>(arg);
     if (err != ERR_ABRT) {
         DEBUG_printf("tcp_client_err %d\n", err);
         //state->tcp_result(err);
     }
-}
+}*/
 
 /** Function prototype for tcp receive callback functions. Called when data has
  * been received.
@@ -147,7 +249,7 @@ void IPStack::tcp_client_err(void *arg, err_t err) {
  *            Only return ERR_ABRT if you have called tcp_abort from within the
  *            callback function!
  */
-err_t IPStack::tcp_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+/*err_t IPStack::tcp_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
     auto state = static_cast<IPStack *>(arg);
     if (!p) {
         // connection has been closed - do we need to react to this somehow?
@@ -275,6 +377,22 @@ int IPStack::disconnect() {
     }
     cyw43_arch_lwip_end();
     return err;
+}*/
+
+// implemented disconnection from wifi (tcp disconnect, deinitialiaze wifi and update conn. status)
+void IPStack::disconnect_WiFi() {
+    // tcp disconnect first
+    /*if (tcp_pcb != nullptr) {
+        disconnect();
+    }*/
+
+    // leaving the current network
+    cyw43_arch_lwip_begin();
+    cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);
+    cyw43_arch_lwip_end();
+
+    wifi_connected = false;
+    //tcp_connected = false;
+
+    DEBUG_printf("WiFi disconnected.\n");
 }
-
-
