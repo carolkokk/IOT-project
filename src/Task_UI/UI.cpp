@@ -15,7 +15,7 @@ extern LVGLPort *g_lvgl_port;
 
 // calibration values for decting touch
 #define TOUCH_X_MIN 340
-#define TOUCH_X_MAX 3840
+#define TOUCH_X_MAX 3860
 #define TOUCH_Y_MIN 275
 #define TOUCH_Y_MAX 3890
 
@@ -53,7 +53,7 @@ void UI::task_impl() {
     sensor_data.temp = 0.0;
     sensor_data.rh = 0.0;
     //for testing initial value is a num
-    target_rh = 50;
+    sensor_data.target_rh = 50;
     sensor_data.type = TEMP_RH;
 
     load_main_screen(sensor_data, true);
@@ -92,13 +92,13 @@ void UI::task_impl() {
             }
         }
 
-        if (slider_val_saved) {
-            slider_val_saved = false;
-            target_rh = slider_value;
+        if (rh_val_saved) {
+            rh_val_saved = false;
+            sensor_data.target_rh = set_rh_value;
             // send new target rh value to queues
             Message msg{};
             msg.type = TARGET_RH;
-            msg.target_rh = target_rh;
+            msg.target_rh = sensor_data.target_rh;
             xQueueSendToBack(to_Control, &msg, portMAX_DELAY);
             xQueueSend(to_Network, &msg, portMAX_DELAY);
 
@@ -117,7 +117,10 @@ void UI::task_impl() {
                     load_main_screen(sensor_data, true);
                     break;
                 case SET_RH:
-                    load_rh_set_screen();
+                    load_rh_set_screen(sensor_data.target_rh);
+                    break;
+                case PRESET_SELECT:
+                    load_preset_screen();
                     break;
             }
         }
@@ -237,15 +240,14 @@ void UI::dd_menu_callback(lv_event_t* e) {
     ui->menu_selected = true;
 }
 
-void UI::load_rh_set_screen() {
-    printf("DEBUG: target_rh = %d (0x%08x)\n", target_rh, target_rh);
+void UI::load_rh_set_screen(uint8_t target_rh) {
     // creating slider for adjusting the target humidity value
     lv_obj_t* slider = lv_slider_create(lv_screen_active());
     lv_obj_align(slider, LV_ALIGN_TOP_MID, 0, 50);
 
     lv_obj_add_event_cb(slider, slider_event_cb, LV_EVENT_VALUE_CHANGED, this);
 
-    lv_slider_set_range(slider, 35, 60);
+    lv_slider_set_range(slider, 35, 65);
     lv_slider_set_value(slider, target_rh, LV_ANIM_OFF);
 
     lv_obj_set_style_anim_duration(slider, 1000, 0);
@@ -254,36 +256,149 @@ void UI::load_rh_set_screen() {
 
     //showing the current set rh as slider initial value
     char buf[8];
-    lv_snprintf(buf, sizeof(buf), "%d%%", static_cast<int>(target_rh));
+    lv_snprintf(buf, sizeof(buf), "%d%%", target_rh);
 
     lv_label_set_text(slider_label, buf);
 
     lv_obj_align_to(slider_label, slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 
     // button to save the new set rh
-    lv_obj_t* btn = lv_button_create(lv_screen_active());
-    lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 80);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x8fa4b0), 0);
+    lv_obj_t* save_btn = lv_button_create(lv_screen_active());
+    lv_obj_add_event_cb(save_btn, save_btn_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_align(save_btn, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(save_btn, lv_color_hex(0x8fa4b0), 0);
 
-    lv_obj_t* btn_label = lv_label_create(btn);
+    lv_obj_t* btn_label = lv_label_create(save_btn);
     lv_label_set_text(btn_label, "SAVE");
-    lv_obj_center(btn);
+    lv_obj_center(btn_label);
+
+    // button to open pre-set page
+    lv_obj_t* preset_btn = lv_button_create(lv_screen_active());
+    lv_obj_add_event_cb(preset_btn, preset_btn_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_align(preset_btn, LV_ALIGN_CENTER, 0, 40);
+
+    lv_obj_t* preset_btn_label = lv_label_create(preset_btn);
+    lv_label_set_text(preset_btn_label, "CHOOSE PRESET");
+    lv_obj_center(preset_btn_label);
+
+    // button to cancel
+    lv_obj_t* cancel_btn = lv_button_create(lv_screen_active());
+    lv_obj_add_event_cb(cancel_btn, cancel_slider_btn_callback, LV_EVENT_CLICKED, this);
+    lv_obj_align(cancel_btn , LV_ALIGN_BOTTOM_LEFT, 0, -10);
+    lv_obj_set_style_bg_color(cancel_btn , lv_color_hex(0x8fa4b0), 0);
+
+    lv_obj_t* cancel_btn_label = lv_label_create(cancel_btn);
+    lv_label_set_text(cancel_btn_label, " < ");
+    lv_obj_center(cancel_btn_label);
 }
 
 void UI::slider_event_cb(lv_event_t* e) {
     auto ui = (UI*)lv_event_get_user_data(e);
     lv_obj_t* slider = lv_event_get_target_obj(e);
 
-    ui->slider_value = (uint8_t)lv_slider_get_value(slider);
+    ui->set_rh_value = (uint8_t)lv_slider_get_value(slider);
 
     char buf[8];
-    lv_snprintf(buf, sizeof(buf), "%d%%", ui->slider_value);
+    lv_snprintf(buf, sizeof(buf), "%d%%", ui->set_rh_value);
     lv_label_set_text(ui->slider_label, buf);
     lv_obj_align_to(ui->slider_label, slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 }
 
-void UI::btn_event_cb(lv_event_t* e) {
+void UI::save_btn_event_cb(lv_event_t* e) {
     auto ui = (UI*)lv_event_get_user_data(e);
-    ui->slider_val_saved = true;
+    ui->rh_val_saved = true;
+}
+
+void UI::preset_btn_event_cb(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    ui->next_screen = PRESET_SELECT;
+}
+
+void UI::cancel_slider_btn_callback(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    ui->next_screen = MAIN;
+}
+
+
+void UI::load_preset_screen() {
+    lv_style_init(&style_radio);
+    lv_style_set_radius(&style_radio, LV_RADIUS_CIRCLE);
+
+    lv_style_init(&style_radio_chk);
+    lv_style_set_bg_image_src(&style_radio_chk, NULL);
+
+    lv_obj_t* cont = lv_obj_create(lv_screen_active());
+    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_size(cont, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont, LV_ALIGN_TOP_MID, 0, 20);
+
+    char buf[64];
+    for (size_t i = 0; i < sizeof(PRESET_OPTIONS) / sizeof(PRESET_OPTIONS[0]); ++i) {
+        lv_obj_t* obj = lv_checkbox_create(cont);
+        lv_snprintf(buf, sizeof(buf), "%s (%d%%)",
+                    PRESET_OPTIONS[i].name, PRESET_OPTIONS[i].rh_val);
+
+        lv_checkbox_set_text(obj, buf);
+        lv_obj_add_flag(obj, LV_OBJ_FLAG_EVENT_BUBBLE);
+        lv_obj_add_style(obj, &style_radio, LV_PART_INDICATOR);
+        lv_obj_add_style(obj, &style_radio_chk, LV_PART_INDICATOR | LV_STATE_CHECKED);
+        lv_obj_set_user_data(obj, reinterpret_cast<void *>(static_cast<uintptr_t>(PRESET_OPTIONS[i].rh_val)));
+        lv_obj_add_event_cb(obj, preset_selection_cb, LV_EVENT_CLICKED, this);
+    }
+
+    lv_obj_t* save_preset_btn = lv_button_create(lv_screen_active());
+    lv_obj_add_event_cb(save_preset_btn, save_preset_btn_callback, LV_EVENT_CLICKED, this);
+    lv_obj_align(save_preset_btn, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_set_style_bg_color(save_preset_btn, lv_color_hex(0x8fa4b0), 0);
+
+    lv_obj_t* btn_label = lv_label_create(save_preset_btn);
+    lv_label_set_text(btn_label, "SAVE");
+    lv_obj_center(btn_label);
+
+    lv_obj_t* cancel_btn = lv_button_create(lv_screen_active());
+    lv_obj_add_event_cb(cancel_btn, cancel_preset_btn_callback, LV_EVENT_CLICKED, this);
+    lv_obj_align(cancel_btn , LV_ALIGN_BOTTOM_LEFT, 0, -10);
+    lv_obj_set_style_bg_color(cancel_btn , lv_color_hex(0x8fa4b0), 0);
+
+    lv_obj_t* cancel_btn_label = lv_label_create(cancel_btn);
+    lv_label_set_text(cancel_btn_label, " < ");
+    lv_obj_center(cancel_btn_label);
+}
+
+void UI::preset_selection_cb(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    lv_obj_t* obj = lv_event_get_target_obj(e);
+    lv_obj_t* cont = lv_obj_get_parent(obj);
+
+    uint32_t child_count = lv_obj_get_child_count(cont);
+    for (int32_t i = 0; i < child_count; ++i) {
+        lv_obj_t* child = lv_obj_get_child(cont, i);
+        if (child != obj) {
+            lv_obj_clear_state(child, LV_STATE_CHECKED);
+        }
+    }
+
+    ui->set_rh_value = static_cast<uint8_t>(reinterpret_cast<uintptr_t>(lv_obj_get_user_data(obj)));
+    printf("Selected RH: %d%%\n", ui->set_rh_value);
+}
+
+void UI::save_preset_btn_callback(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    ui->rh_val_saved = true;
+}
+
+void UI::cancel_preset_btn_callback(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    ui->next_screen = SET_RH;
+}
+
+void UI::create_save_button(lv_event_cb_t* event_cb) {
+    lv_obj_t* save_btn = lv_button_create(lv_screen_active());
+    lv_obj_add_event_cb(save_btn, save_btn_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_align(save_btn, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(save_btn, lv_color_hex(0x8fa4b0), 0);
+
+    lv_obj_t* btn_label = lv_label_create(save_btn);
+    lv_label_set_text(btn_label, "SAVE");
+    lv_obj_center(btn_label);
 }
