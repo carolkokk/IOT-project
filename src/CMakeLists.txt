@@ -11,7 +11,7 @@ add_executable(${ProjectName}
 
         mqtt/ipstack/IPStack.cpp
         mqtt/ipstack/IPStack.h
-        mqtt/ipstack/lwipopts.h
+        ../lwipopts.h
         mqtt/tls/tls_common.c
         mqtt/tls/tls_common.h
         mqtt/ipstack/lwipopts_tls.h
@@ -45,8 +45,8 @@ add_executable(${ProjectName}
         Task_Control/Control.h
         Task_UI/UI.cpp
         Task_UI/UI.h
-        Task_Network/Network.cpp
-        Task_Network/Network.h
+        #Task_Network/Network.cpp
+        #Task_Network/Network.h
         GPIO/GPIO.h
         GPIO/GPIO.cpp
         PWM/PWM.h
@@ -59,6 +59,7 @@ add_executable(${ProjectName}
         Temp_Rh/BME680.h
         Temp_Rh/BME680_wrapper.cpp
         Temp_Rh/BME680_wrapper.h
+        Temp_Rh/BME68x_SensorAPI/bme68x.c
         display/ili9341.cpp
         display/ili9341.h
         display/lvgl_port.cpp
