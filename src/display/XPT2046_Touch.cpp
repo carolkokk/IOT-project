@@ -4,9 +4,8 @@
 
 #include "XPT2046_Touch.h"
 
-#define Z_THRESHOLD     300
-#define Z_THRESHOLD_INT	75
-#define MS_THRESHOLD  3
+#define Z_THRESHOLD 200
+#define MS_THRESHOLD 3
 
 XPT2046_Touch::XPT2046_Touch(PicoSPIDevice *spi_device)
                             :spi_dev(spi_device),

@@ -12,6 +12,19 @@
 #include "display/ili9341.h"
 #include "display/XPT2046_Touch.h"
 
+enum screens {
+    MAIN,
+    SET_RH,
+    PRESET_SELECT,
+    SET_NETWORK,
+    SCAN_NETWORK,
+    ENTER_PASS,
+};
+
+struct Preset_Options {
+    const char* name;
+    uint8_t rh_val;
+};
 
 class UI {
 public:
@@ -39,33 +52,40 @@ private:
 
     void init_UI(void);
 
-    enum screens {
-        MAIN,
-        SET_RH,
-        SET_NETWORK,
-        SCAN_NETWORK,
-        ENTER_PASS,
-    };
-
     screens current_screen;
     screens next_screen;
 
     // flags for events (maybe do event bits?)
     bool menu_selected;
-    bool slider_val_saved;
+    bool rh_val_saved;
 
     // data variables
     uint8_t menu_selection;
-    int32_t slider_value;
-    uint8_t target_rh = 50;
+    uint8_t set_rh_value;
+    //uint8_t target_rh = 50;
 
     // functions for loading different UI screens
     void load_main_screen(Message received, bool initial);
     static void dd_menu_callback(lv_event_t* e);
 
-    void load_rh_set_screen();
+    void load_rh_set_screen(uint8_t target_rh);
     static void slider_event_cb(lv_event_t * e);
-    static void btn_event_cb(lv_event_t * e);
+    static void save_btn_event_cb(lv_event_t * e);
+    static void preset_btn_event_cb(lv_event_t * e);
+    static void cancel_slider_btn_callback(lv_event_t *e);
+    static void cancel_preset_btn_callback(lv_event_t *e);
+
+    static constexpr Preset_Options PRESET_OPTIONS[] = {
+        {"Acoustic gitar", 45},
+        {"Electric guitar", 40},
+        {"Violin", 50},
+        {"Cigars", 65}
+    };
+    void load_preset_screen();
+    static void preset_selection_cb(lv_event_t * e);
+    static void save_preset_btn_callback(lv_event_t * e);
+
+    void create_save_button(lv_event_cb_t* event_cb);
 
     // lvgl UI elements
     lv_obj_t *temp_label;
@@ -73,6 +93,9 @@ private:
     lv_obj_t *dropdown;
     lv_obj_t *tank_label;
     lv_obj_t *network_label;
+
+    lv_style_t style_radio;
+    lv_style_t style_radio_chk;
 
     // static to be used from multiple places
     lv_obj_t * slider_label;
