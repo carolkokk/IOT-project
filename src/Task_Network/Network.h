@@ -26,7 +26,7 @@ private:
     void task_impl();
     bool connect_wifi(const char* ssid, const char* pwd,IPStack& ipstack);
     int disconnect_wifi(IPStack &ip_stack);
-    void mqtt_pub(MQTTService& mqtt, uint8_t tem, uint8_t hum);
+    void mqtt_pub(MQTTService& mqtt, double tem, double hum);
     const char *name = "NETWORK";
     QueueHandle_t to_UI;
     QueueHandle_t to_Network;
