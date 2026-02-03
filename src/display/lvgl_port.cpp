@@ -18,7 +18,7 @@ LVGLPort::LVGLPort(std::shared_ptr<ili9341> display)
 void LVGLPort::init() {
     lv_init();
 
-    // buffer for pixels for 1/10 of the screen: (240*320)/10 = 7680
+    // buffer for pixels for 1/10 of the screen: (240*320)/3 = 7680
     // 1 pixel = 2 bytes
     static lv_color_t buf1[7680];
     static lv_color_t buf2[7680];
@@ -30,7 +30,7 @@ void LVGLPort::init() {
     lv_display_set_flush_cb(disp, display_flush_cb);
 
     // setting buffers
-    lv_display_set_buffers(disp, buf1, buf2, sizeof(buf1), LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(disp, buf1, NULL, sizeof(buf1), LV_DISPLAY_RENDER_MODE_PARTIAL);
 }
 
 void LVGLPort::display_flush_cb(lv_display_t *display, const lv_area_t *area, uint8_t *px_map) {

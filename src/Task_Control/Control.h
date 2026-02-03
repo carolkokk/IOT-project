@@ -20,7 +20,6 @@ private:
     QueueHandle_t to_Network;
     QueueHandle_t to_Control;
     TickType_t period;
-
     uint8_t set_rh;
 };
 
