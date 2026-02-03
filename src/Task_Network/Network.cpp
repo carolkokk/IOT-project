@@ -1,4 +1,5 @@
 #include "Network.h"
+#include "Fmutex.h"
 
 Network::Network(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
@@ -37,6 +38,8 @@ void Network::task_impl() {
     IPStack ipstack(tls_client,cert_thingspeak,TLS_CLIENT_TIMEOUT_SECS);
     MQTTService mqtt(ipstack,HOSTNAME,PORT,MQTT_CLIENT_ID,sub_topic,pub_topic);
 
+    Fmutex mutex = Fmutex();
+    mutex.lock();
     if (!connect_wifi(ssid,pwd,ipstack)){
         printf("WIFI connection failed\n");
     }
@@ -49,6 +52,8 @@ void Network::task_impl() {
     }
 
     vTaskDelay(pdMS_TO_TICKS(500));
+    printf("mqtt connected\n");
+    mutex.unlock();
 
     //publish a message to the MQTT broker for verification for MQTT connection
     //mqtt_pub(mqtt,tem,hum);

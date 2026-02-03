@@ -66,7 +66,7 @@ void Control::task_impl() {
         //printf("RH: %.2f %%\n", rh_sensor.read_rh());
         temp_rh.temp = std::round(rh_sensor.read_temp() * 100.0) / 100.0;
         temp_rh.rh = std::round(rh_sensor.read_rh() * 100.0) / 100.0;
-        //xQueueSendToBack(to_UI, &temp_rh, portMAX_DELAY);
+        xQueueSendToBack(to_UI, &temp_rh, portMAX_DELAY);
         xQueueSendToBack(to_Network, &temp_rh, portMAX_DELAY);
 
         //now the humidifier turns on for 5s for 15 times, later on can be used with H&T temperature.
