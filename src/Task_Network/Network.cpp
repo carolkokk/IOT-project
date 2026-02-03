@@ -53,7 +53,7 @@ void Network::task_impl() {
     vTaskDelay(pdMS_TO_TICKS(500));
 
     //publish a message to the MQTT broker for verification for MQTT connection
-    mqtt_pub(mqtt,tem,hum);
+    //mqtt_pub(mqtt,tem,hum);
 
     //check connection once in 5s
     const TickType_t period = pdMS_TO_TICKS(5000);
@@ -64,8 +64,12 @@ void Network::task_impl() {
         xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));
 
         while (xQueueReceive(to_Network,&received,pdMS_TO_TICKS(10))) {
-            if (received.type == TEST_STRING){
-                printf("received %s\n",received.string);
+            if (received.type == TEMP_RH){
+                tem = static_cast<uint8_t>(received.temp);
+                hum = static_cast<uint8_t>(received.rh);
+                printf("received %u\n",hum);
+                printf("received %u\n",tem);
+                mqtt_pub(mqtt,tem,hum);
             }else if (received.type == TEST_NUMBER){
                 printf("received %u\n",received.number);
             }
@@ -99,9 +103,9 @@ void Network::task_impl() {
         }
 
         //yield. socket that client uses calls cyw43_arch_poll()
-        mqtt.loop(10);
+        mqtt.loop(5);
 
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 

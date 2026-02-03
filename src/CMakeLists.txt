@@ -11,7 +11,7 @@ add_executable(${ProjectName}
 
         mqtt/ipstack/IPStack.cpp
         mqtt/ipstack/IPStack.h
-        ../lwipopts.h
+        mqtt/ipstack/lwipopts.h
         mqtt/tls/tls_common.c
         mqtt/tls/tls_common.h
         mqtt/ipstack/lwipopts_tls.h
@@ -45,8 +45,8 @@ add_executable(${ProjectName}
         Task_Control/Control.h
         Task_UI/UI.cpp
         Task_UI/UI.h
-        #Task_Network/Network.cpp
-        #Task_Network/Network.h
+        Task_Network/Network.cpp
+        Task_Network/Network.h
         GPIO/GPIO.h
         GPIO/GPIO.cpp
         PWM/PWM.h

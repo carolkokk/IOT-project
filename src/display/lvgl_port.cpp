@@ -18,10 +18,10 @@ LVGLPort::LVGLPort(std::shared_ptr<ili9341> display)
 void LVGLPort::init() {
     lv_init();
 
-    // buffer for pixels for 1/3 of the screen: (240*320)/3 = 7680
+    // buffer for pixels for 1/10 of the screen: (240*320)/10 = 7680
     // 1 pixel = 2 bytes
-    static lv_color_t buf1[15360];
-    static lv_color_t buf2[15360];
+    static lv_color_t buf1[7680];
+    static lv_color_t buf2[7680];
 
     // creating lvgl display
     disp = lv_display_create(display->get_width(), display->get_height());
