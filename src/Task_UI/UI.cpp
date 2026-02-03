@@ -76,6 +76,10 @@ void UI::task_impl() {
                 printf("UI received TEMP: %.2f\n", received.temp);
                 printf("UI received RH: %.2f\n", received.rh);
             }
+            if (received.type == TARGET_RH) {
+                sensor_data.target_rh = received.target_rh;
+                printf("UI RECEIVED set rh: %d", received.target_rh);
+            }
         }
         lv_timer_handler();
 

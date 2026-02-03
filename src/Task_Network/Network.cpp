@@ -73,8 +73,9 @@ void Network::task_impl() {
                 printf("received %.2f\n",received.temp);
                 printf("received %.2f\n",received.rh);
                 mqtt_pub(mqtt,tem,hum);
-            }else if (received.type == TEST_NUMBER){
-                printf("received %u\n",received.number);
+            }
+            else if (received.type == TARGET_RH){
+                printf("target rh received %u\n",received.target_rh);
             }
         }
 
@@ -107,6 +108,8 @@ void Network::task_impl() {
             send_msg.target_rh = set_hum;
             printf("converted%u\n",set_hum);
             xQueueSendToBack(to_Control, &send_msg, pdMS_TO_TICKS(10));
+            xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));
+
         }
 
         //yield. socket that client uses calls cyw43_arch_poll()

@@ -47,7 +47,7 @@ void Control::task_impl() {
 
     while(true) {
         //xQueueSendToBack(to_UI, &send_numbers, portMAX_DELAY);
-        xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
+        //xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
 
         while (xQueueReceive(to_Control,&received,pdMS_TO_TICKS(10))) {
             if (received.type == TEST_STRING){
@@ -59,6 +59,7 @@ void Control::task_impl() {
             else if (received.type == TARGET_RH) {
                 printf("New target rh: %d\n", static_cast<uint8_t>(received.target_rh));
                 set_rh = static_cast<uint8_t>(received.target_rh);
+                printf("set_rh in control task: %d\n", set_rh);
             }
         }
 
@@ -70,19 +71,27 @@ void Control::task_impl() {
         xQueueSendToBack(to_Network, &temp_rh, portMAX_DELAY);
 
         //now the humidifier turns on for 5s for 15 times, later on can be used with H&T temperature.
-        if (temp_rh.rh <= set_rh) {
+        // hum or dehum is on outside of the set_rh +-5% range
+        uint8_t uin_rh = static_cast<uint8_t>(temp_rh.rh);
+        if (uin_rh >= set_rh -5 && uin_rh <= set_rh +5) {
+            dehumidifier.dehum_off();
+            humidifier.humidifier_off();
+        }
+        else if (uin_rh < (set_rh - 5)) {
+            printf("set_rh in control task: %d\n", set_rh -5);
+            printf("current rh in control task: %d\n", static_cast<uint8_t>(temp_rh.rh));
             dehumidifier.dehum_off();
             humidifier.humidifier_on();
             printf("Humidifier on\n");
             //turn on the humidifier for 5s just for testing
-            vTaskDelay(pdMS_TO_TICKS(5000));
-        } else {
+            //vTaskDelay(pdMS_TO_TICKS(5000));
+        } else if (uin_rh > set_rh + 5) {
             humidifier.humidifier_off();
             printf("Humidifier off \n");
             //turn on the dehumidifier for 5s just for testing
             dehumidifier.dehum_on();
             printf("Dehumidifier on\n");
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            //vTaskDelay(pdMS_TO_TICKS(5000));
             //dehumidifier.dehum_off();
             //printf("Dehumidifier off \n");
             //count++;

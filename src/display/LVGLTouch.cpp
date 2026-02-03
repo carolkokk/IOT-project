@@ -52,12 +52,12 @@ void LVGLTouch::read(lv_indev_data_t *data) {
         uint16_t raw_y = touch->getRawY();
         uint16_t raw_z = touch->getRawZ();
 
-        printf("Touch detected! Raw: x=%d, y=%d, z=%d\n", raw_x, raw_y, raw_z);
+        //printf("Touch detected! Raw: x=%d, y=%d, z=%d\n", raw_x, raw_y, raw_z);
 
         data->point.x = mapX(raw_x);
         data->point.y = mapY(raw_y);
         data->state = LV_INDEV_STATE_PRESSED;
-        printf("Mapped: x=%d, y=%d\n", data->point.x, data->point.y);
+        //printf("Mapped: x=%d, y=%d\n", data->point.x, data->point.y);
 
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
