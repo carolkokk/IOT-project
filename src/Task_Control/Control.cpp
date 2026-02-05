@@ -12,7 +12,7 @@ Control::Control(
     UBaseType_t priority) :
     to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),period(period){
 
-    xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr);
+    xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr); 
 }
 
 void Control::task_wrap(void *pvParameters) {
