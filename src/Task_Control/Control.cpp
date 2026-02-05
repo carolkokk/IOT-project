@@ -1,9 +1,19 @@
 #include "Control.h"
 #include <cstdio>
 #include "Structs.h"
+#include "event_groups.h"
 #include "PWM/PWM.h"
 #include "Humidifier/Humidifier.h"
 #include "Dehumidifier/Dehumidifier.h"
+#include "WaterSensor/WaterSensor.h"
+
+
+extern EventGroupHandle_t g_water_event_group;
+
+#define EVT_NO_WATER        (1 << 0)
+#define EVT_WATER_PRESENT  (1 << 1)
+
+
 
 Control::Control(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
@@ -30,6 +40,18 @@ void Control::task_impl() {
     auto i2cbus0 = std::make_shared<PicoI2C>(0, 100000);
     BME680 rh_sensor(i2cbus0, 0x76);
 
+    // --- Water sensors ---
+    WaterSensor no_water_sensor(28, true);
+    WaterSensor water_sensor(27, true);
+
+    no_water_sensor.Init();
+    water_sensor.Init();
+
+    bool last_no_water_alarm = false;
+    bool last_water_alarm    = false;
+
+
+
     int count = 0;
 
     //test structure where Control sends a number to both UI and Network
@@ -44,8 +66,38 @@ void Control::task_impl() {
     temp_rh.type = TEMP_RH;
 
     while(true) {
-        //xQueueSendToBack(to_UI, &send_numbers, portMAX_DELAY);
-        xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
+        bool no_water_detected = no_water_sensor.Read();
+        bool water_detected    = water_sensor.Read();
+
+        bool no_water_alarm = !no_water_detected;
+        bool water_alarm    = water_detected;
+
+        // No water alarm
+        if (no_water_alarm != last_no_water_alarm) {
+            last_no_water_alarm = no_water_alarm;
+
+            if (no_water_alarm) {
+                xEventGroupSetBits(g_water_event_group, EVT_NO_WATER);
+            } else {
+                xEventGroupClearBits(g_water_event_group, EVT_NO_WATER);
+            }
+        }
+
+        // Water present state
+        if (water_alarm != last_water_alarm) {
+            last_water_alarm = water_alarm;
+
+            if (water_alarm) {
+                xEventGroupSetBits(g_water_event_group, EVT_WATER_PRESENT);
+            } else {
+                xEventGroupClearBits(g_water_event_group, EVT_WATER_PRESENT);
+            }
+        }
+
+
+
+
+
 
         while (xQueueReceive(to_Control,&received,pdMS_TO_TICKS(10))) {
             if (received.type == TEST_STRING){
