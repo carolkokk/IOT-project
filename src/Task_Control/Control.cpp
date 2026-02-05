@@ -21,7 +21,7 @@ Control::Control(
     UBaseType_t priority) :
     to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),period(period){
 
-    xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr);
+    xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr); 
 }
 
 void Control::task_wrap(void *pvParameters) {
@@ -106,6 +106,9 @@ void Control::task_impl() {
             {
                 printf("received %u\n",received.number);
             }
+            else if (received.type == TARGET_RH) {
+                printf("New target rh: %d\n", static_cast<uint8_t>(received.target_rh));
+            }
         }
 
         //printf("T: %.2f C\n", rh_sensor.read_temp());
@@ -114,25 +117,24 @@ void Control::task_impl() {
         temp_rh.rh = rh_sensor.read_rh();
         xQueueSendToBack(to_UI, &temp_rh, portMAX_DELAY);
 
-
         //now the humidifier turns on for 5s for 15 times, later on can be used with H&T temperature.
-        if (count <= 15){
+        if (temp_rh.rh <= 27) {
+            dehumidifier.dehum_off();
             humidifier.humidifier_on();
-            printf("Humidifier on for 5s\n");
+            printf("Humidifier on\n");
             //turn on the humidifier for 5s just for testing
             vTaskDelay(pdMS_TO_TICKS(5000));
+        } else {
             humidifier.humidifier_off();
             printf("Humidifier off \n");
             //turn on the dehumidifier for 5s just for testing
             dehumidifier.dehum_on();
-            printf("Dehumidifier on for 5s\n");
+            printf("Dehumidifier on\n");
             vTaskDelay(pdMS_TO_TICKS(5000));
-            dehumidifier.dehum_off();
-            printf("Dehumidifier off \n");
-            count++;
+            //dehumidifier.dehum_off();
+            //printf("Dehumidifier off \n");
+            //count++;
         }
-
         vTaskDelayUntil(&lastWakeTime, period);
     }
 }
-

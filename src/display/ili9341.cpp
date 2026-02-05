@@ -197,21 +197,21 @@ void ili9341::setrotation(uint8_t r) {
 
     switch (r) {
       case 0:
-        madctl = ILI9341_MADCTL_BGR;
+        madctl = ILI9341_MADCTL_RGB;
         width = windowWidth;
         height = windowHeight;
         _xstart = 0;
         _ystart = 0;
         break;
       case 1:
-        madctl = ILI9341_MADCTL_MV | ILI9341_MADCTL_MX | ILI9341_MADCTL_BGR;
+        madctl = ILI9341_MADCTL_MV | ILI9341_MADCTL_MX | ILI9341_MADCTL_RGB;
         width  = windowHeight;
         height = windowWidth;
         _xstart = 0;
         _ystart = 0;
         break;
       case 2:
-        madctl = ILI9341_MADCTL_MY | ILI9341_MADCTL_BGR;
+        madctl = ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB;
         width  = windowWidth;
         height = windowHeight;
         _xstart = 0;
@@ -219,7 +219,7 @@ void ili9341::setrotation(uint8_t r) {
         break;
       case 3:
         madctl = ILI9341_MADCTL_MV | ILI9341_MADCTL_MY |
-                  ILI9341_MADCTL_BGR;
+                  ILI9341_MADCTL_RGB;
         width  = windowHeight;
         height = windowWidth;
         _xstart = 0;
