@@ -11,6 +11,11 @@
 //initialization of Dehumidifier, GPIO 17
 #define DEHUMIDIFIER_PIN 17
 
+//initialization of Fan, GPIO 2
+#define FAN_PIN 2
+
+
+
 //simple examples for testing
 enum MessageType{
     TEST_NUMBER,
