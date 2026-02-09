@@ -76,6 +76,10 @@ void UI::task_impl() {
                 printf("UI received TEMP: %.2f\n", received.temp);
                 printf("UI received RH: %.2f\n", received.rh);
             }
+            if (received.type == TARGET_RH) {
+                sensor_data.target_rh = received.target_rh;
+                printf("UI RECEIVED set rh: %d", received.target_rh);
+            }
         }
         lv_timer_handler();
 
@@ -100,7 +104,7 @@ void UI::task_impl() {
             msg.type = TARGET_RH;
             msg.target_rh = sensor_data.target_rh;
             xQueueSendToBack(to_Control, &msg, portMAX_DELAY);
-            xQueueSend(to_Network, &msg, portMAX_DELAY);
+            xQueueSendToBack(to_Network, &msg, portMAX_DELAY);
 
             next_screen = MAIN;
         }

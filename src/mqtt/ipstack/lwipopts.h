@@ -102,6 +102,6 @@
 #define SLIP_DEBUG                  LWIP_DBG_OFF
 #define DHCP_DEBUG                  LWIP_DBG_OFF
 
-#include "src/mqtt/ipstack/lwipopts_tls.h"
+#include "lwipopts_tls.h"
 
 #endif /* __LWIPOPTS_H__ */
