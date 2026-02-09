@@ -5,6 +5,7 @@
 #include "Humidifier/Humidifier.h"
 #include "Dehumidifier/Dehumidifier.h"
 #include <cmath>
+#include "Fan/Fan.h"
 
 Control::Control(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
@@ -26,6 +27,7 @@ void Control::task_impl() {
 
     //initialization of Dehumidifier
     Dehumidifier dehumidifier(DEHUMIDIFIER_PIN);
+    Fan fan_hum(FAN_PIN);
 
     //temperature and humidity sensor
     auto i2cbus0 = std::make_shared<PicoI2C>(0, 100000);
@@ -76,18 +78,23 @@ void Control::task_impl() {
         if (uin_rh >= set_rh -5 && uin_rh <= set_rh +5) {
             dehumidifier.dehum_off();
             humidifier.humidifier_off();
+            fan_hum.fan_off();
         }
         else if (uin_rh < (set_rh - 5)) {
             printf("set_rh in control task: %d\n", set_rh -5);
             printf("current rh in control task: %d\n", static_cast<uint8_t>(temp_rh.rh));
             dehumidifier.dehum_off();
             humidifier.humidifier_on();
+            fan_hum.fan_on();
             printf("Humidifier on\n");
+            printf("Fan on\n");
             //turn on the humidifier for 5s just for testing
             //vTaskDelay(pdMS_TO_TICKS(5000));
         } else if (uin_rh > set_rh + 5) {
             humidifier.humidifier_off();
+            fan_hum.fan_off();
             printf("Humidifier off \n");
+            printf("Fan off \n");
             //turn on the dehumidifier for 5s just for testing
             dehumidifier.dehum_on();
             printf("Dehumidifier on\n");

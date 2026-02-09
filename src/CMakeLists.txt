@@ -68,6 +68,9 @@ add_executable(${ProjectName}
         display/XPT2046_Touch.h
         display/LVGLTouch.cpp
         display/LVGLTouch.h
+
+        Fan/Fan.cpp
+        Fan/Fan.h
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
@@ -82,6 +85,7 @@ target_include_directories(${ProjectName} PRIVATE
         spi
         display
         mqtt
+        mqtt/ipstack
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
