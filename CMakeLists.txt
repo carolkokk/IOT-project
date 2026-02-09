@@ -26,6 +26,7 @@ pico_sdk_init()
 add_subdirectory(src)
 add_subdirectory(lvgl)
 
+
 #target_include_directories(lvgl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_include_directories(lvgl PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}

@@ -59,7 +59,7 @@ add_executable(${ProjectName}
         Temp_Rh/BME680.h
         Temp_Rh/BME680_wrapper.cpp
         Temp_Rh/BME680_wrapper.h
-        Temp_Rh/BME68X_SensorAPI/bme68x.c
+#        Temp_Rh/BME68X_SensorAPI/bme68x.c
         display/ili9341.cpp
         display/ili9341.h
         display/lvgl_port.cpp
@@ -107,8 +107,8 @@ target_link_libraries(${ProjectName}
         hardware_i2c
         FreeRTOS-Kernel-Heap4
         pico_cyw43_arch_lwip_sys_freertos
-        #pico_lwip_mbedtls
-        #pico_mbedtls
+        pico_lwip_mbedtls
+        pico_mbedtls
         hardware_pwm
         hardware_spi
         lvgl

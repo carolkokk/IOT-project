@@ -1,7 +1,7 @@
 #ifndef STRUCTS_H
 #define STRUCTS_H
 #include <cstdint>
-#include "configpass.h"
+//#include "configpass.h"
 
 //initialization of Humidifier, GPIO 16 set as PWM, frequency 109 khz (LC resonance with piezo frequency), duty 50%.
 #define HUMIDIFIER_PIN 16
