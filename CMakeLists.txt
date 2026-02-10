@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.12)
 
 cmake_policy(SET CMP0079 NEW)
 
+set(PICO_NO_PICOTOOL 1)
+
 # Set board type because we are building for PicoW
 set(PICO_BOARD pico_w)
 
