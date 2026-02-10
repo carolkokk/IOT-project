@@ -14,5 +14,4 @@ target_link_libraries(WaterSensor
         pico_stdlib
 )
 
-# Build test executable
-add_subdirectory(test)
+

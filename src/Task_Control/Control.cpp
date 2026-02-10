@@ -42,8 +42,8 @@ void Control::task_impl() {
     BME680 rh_sensor(i2cbus0, 0x76);
 
     // --- Water sensors ---
-    WaterSensor no_water_sensor(28, true);
-    WaterSensor water_sensor(27, true);
+    WaterSensor no_water_sensor(20, true);
+    WaterSensor water_sensor(21, true);
 
     no_water_sensor.Init();
     water_sensor.Init();

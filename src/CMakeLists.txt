@@ -71,7 +71,6 @@ add_executable(${ProjectName}
 
         WaterSensor/WaterSensor.h
         WaterSensor/WaterSensor.cpp
-        WaterSensor/test/main.cpp
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
