@@ -71,6 +71,8 @@ add_executable(${ProjectName}
 
         Fan/Fan.cpp
         Fan/Fan.h
+        WaterSensor/WaterSensor.cpp
+        WaterSensor/WaterSensor.h
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)

@@ -6,6 +6,13 @@
 #include "Dehumidifier/Dehumidifier.h"
 #include <cmath>
 #include "Fan/Fan.h"
+#include "event_groups.h"
+#include "WaterSensor/WaterSensor.h"
+
+extern EventGroupHandle_t g_water_event_group;
+
+#define EVT_NO_WATER        (1 << 0)
+#define EVT_WATER_PRESENT  (1 << 1)
 
 Control::Control(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
@@ -33,6 +40,17 @@ void Control::task_impl() {
     auto i2cbus0 = std::make_shared<PicoI2C>(0, 100000);
     BME680 rh_sensor(i2cbus0, 0x76);
 
+    // --- Water sensors ---
+    WaterSensor no_water_sensor(20, true);
+    WaterSensor water_sensor(21, true);
+
+    no_water_sensor.Init();
+    water_sensor.Init();
+
+    bool last_no_water_alarm = false;
+    bool last_water_alarm    = false;
+
+
     //initial target rh
     set_rh = 50;
 
@@ -50,6 +68,38 @@ void Control::task_impl() {
     while(true) {
         //xQueueSendToBack(to_UI, &send_numbers, portMAX_DELAY);
         //xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
+
+        bool no_water_detected = no_water_sensor.Read();
+        bool water_detected    = water_sensor.Read();
+
+        bool no_water_alarm = !no_water_detected;
+        bool water_alarm    = water_detected;
+
+        // No water alarm
+        if (no_water_alarm != last_no_water_alarm) {
+            last_no_water_alarm = no_water_alarm;
+
+            if (no_water_alarm) {
+                printf("WARNING: No water detected! Tank is empty.\r\n");
+                xEventGroupSetBits(g_water_event_group, EVT_NO_WATER);
+            } else {
+                printf("INFO: Water restored. Tank is no longer empty.\r\n");
+                xEventGroupClearBits(g_water_event_group, EVT_NO_WATER);
+            }
+        }
+
+        // Water present state
+        if (water_alarm != last_water_alarm) {
+            last_water_alarm = water_alarm;
+
+            if (water_alarm) {
+                printf("WARNING: Too much water!\r\n");
+                xEventGroupSetBits(g_water_event_group, EVT_WATER_PRESENT);
+            } else {
+                printf("INFO: Water level is no longer too high.\r\n");
+                xEventGroupClearBits(g_water_event_group, EVT_WATER_PRESENT);
+            }
+        }
 
         while (xQueueReceive(to_Control,&received,pdMS_TO_TICKS(10))) {
             if (received.type == TEST_STRING){
