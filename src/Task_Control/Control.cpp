@@ -7,18 +7,14 @@
 #include <cmath>
 #include "Fan/Fan.h"
 #include "event_groups.h"
+#include "Temp_Rh/BME680_wrapper.h"
 #include "WaterSensor/WaterSensor.h"
 
-extern EventGroupHandle_t g_water_event_group;
-
-#define EVT_NO_WATER        (1 << 0)
-#define EVT_WATER_PRESENT  (1 << 1)
-
 Control::Control(
-    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
+    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, EventGroupHandle_t event_group, TickType_t period,
     uint32_t stack_size,
     UBaseType_t priority) :
-    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),period(period){
+    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),event_group(event_group),period(period){
 
     xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr); 
 }
@@ -41,15 +37,11 @@ void Control::task_impl() {
     BME680 rh_sensor(i2cbus0, 0x76);
 
     // --- Water sensors ---
-    WaterSensor no_water_sensor(20, true);
-    WaterSensor water_sensor(21, true);
+    WaterSensor dehum_water_sensor(DEHUM_WATER_PIN, true);
+    WaterSensor humidifier_water_sensor(HUM_WATER_PIN, true);
 
-    no_water_sensor.Init();
-    water_sensor.Init();
-
-    bool last_no_water_alarm = false;
-    bool last_water_alarm    = false;
-
+    dehum_water_sensor.Init();
+    humidifier_water_sensor.Init();
 
     //initial target rh
     set_rh = 50;
@@ -69,36 +61,25 @@ void Control::task_impl() {
         //xQueueSendToBack(to_UI, &send_numbers, portMAX_DELAY);
         //xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
 
-        bool no_water_detected = no_water_sensor.Read();
-        bool water_detected    = water_sensor.Read();
+        bool dehum_water_alarm  = !dehum_water_sensor.Read();
+        bool humidifier_water_alarm     = humidifier_water_sensor.Read();
 
-        bool no_water_alarm = !no_water_detected;
-        bool water_alarm    = water_detected;
-
-        // No water alarm
-        if (no_water_alarm != last_no_water_alarm) {
-            last_no_water_alarm = no_water_alarm;
-
-            if (no_water_alarm) {
-                printf("WARNING: No water detected! Tank is empty.\r\n");
-                xEventGroupSetBits(g_water_event_group, EVT_NO_WATER);
-            } else {
-                printf("INFO: Water restored. Tank is no longer empty.\r\n");
-                xEventGroupClearBits(g_water_event_group, EVT_NO_WATER);
-            }
+        // dehumidifier water alarm, triggers when water is detected
+        if (dehum_water_alarm) {
+            printf("WARNING: Too much water!.\r\n");
+            xEventGroupSetBits(event_group, EVT_WATER_PRESENT);
+        }else
+        {
+            xEventGroupClearBits(event_group, EVT_WATER_PRESENT);
         }
 
-        // Water present state
-        if (water_alarm != last_water_alarm) {
-            last_water_alarm = water_alarm;
-
-            if (water_alarm) {
-                printf("WARNING: Too much water!\r\n");
-                xEventGroupSetBits(g_water_event_group, EVT_WATER_PRESENT);
-            } else {
-                printf("INFO: Water level is no longer too high.\r\n");
-                xEventGroupClearBits(g_water_event_group, EVT_WATER_PRESENT);
-            }
+        // humidifier water alarm, triggers when water is not detected
+        if (humidifier_water_alarm) {
+            printf("WARNING: No water detected! Tank is empty\r\n");
+            xEventGroupSetBits(event_group, EVT_NO_WATER);
+        }else
+        {
+            xEventGroupClearBits(event_group, EVT_NO_WATER);
         }
 
         while (xQueueReceive(to_Control,&received,pdMS_TO_TICKS(10))) {
@@ -122,37 +103,38 @@ void Control::task_impl() {
         xQueueSendToBack(to_UI, &temp_rh, portMAX_DELAY);
         xQueueSendToBack(to_Network, &temp_rh, portMAX_DELAY);
 
-        //now the humidifier turns on for 5s for 15 times, later on can be used with H&T temperature.
-        // hum or dehum is on outside of the set_rh +-5% range
-        uint8_t uin_rh = static_cast<uint8_t>(temp_rh.rh);
-        if (uin_rh >= set_rh -5 && uin_rh <= set_rh +5) {
+
+        if (!humidifier_water_alarm && !dehum_water_alarm){
+            // hum or dehum is on outside of the set_rh +-5% range
+            uint8_t uin_rh = static_cast<uint8_t>(temp_rh.rh);
+            if (uin_rh >= set_rh -5 && uin_rh <= set_rh +5) {
+                dehumidifier.dehum_off();
+                humidifier.humidifier_off();
+                fan_hum.fan_off();
+            }
+            else if (uin_rh < (set_rh - 5)) {
+                printf("set_rh in control task: %d\n", set_rh -5);
+                printf("current rh in control task: %d\n", static_cast<uint8_t>(temp_rh.rh));
+                dehumidifier.dehum_off();
+                humidifier.humidifier_on();
+                fan_hum.fan_on();
+                printf("Humidifier on\n");
+                printf("Fan on\n");
+            } else if (uin_rh > set_rh + 5) {
+                humidifier.humidifier_off();
+                fan_hum.fan_off();
+                printf("Humidifier off \n");
+                printf("Fan off \n");
+                dehumidifier.dehum_on();
+                printf("Dehumidifier on\n");
+            }
+        }else{
+            //turn off all the devices if alarm is triggered
             dehumidifier.dehum_off();
             humidifier.humidifier_off();
             fan_hum.fan_off();
         }
-        else if (uin_rh < (set_rh - 5)) {
-            printf("set_rh in control task: %d\n", set_rh -5);
-            printf("current rh in control task: %d\n", static_cast<uint8_t>(temp_rh.rh));
-            dehumidifier.dehum_off();
-            humidifier.humidifier_on();
-            fan_hum.fan_on();
-            printf("Humidifier on\n");
-            printf("Fan on\n");
-            //turn on the humidifier for 5s just for testing
-            //vTaskDelay(pdMS_TO_TICKS(5000));
-        } else if (uin_rh > set_rh + 5) {
-            humidifier.humidifier_off();
-            fan_hum.fan_off();
-            printf("Humidifier off \n");
-            printf("Fan off \n");
-            //turn on the dehumidifier for 5s just for testing
-            dehumidifier.dehum_on();
-            printf("Dehumidifier on\n");
-            //vTaskDelay(pdMS_TO_TICKS(5000));
-            //dehumidifier.dehum_off();
-            //printf("Dehumidifier off \n");
-            //count++;
-        }
+
         vTaskDelayUntil(&lastWakeTime, period);
     }
 }
