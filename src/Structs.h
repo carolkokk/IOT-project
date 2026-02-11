@@ -14,6 +14,15 @@
 //initialization of Fan, GPIO 2
 #define FAN_PIN 2
 
+//initialization of dehum_water_sensor GPIO 20
+#define DEHUM_WATER_PIN 20
+
+//initialization of hum_water_sensor GPIO 21
+#define HUM_WATER_PIN 21
+
+//event groups
+#define EVT_NO_WATER        (1 << 0)
+#define EVT_WATER_PRESENT  (1 << 1)
 
 
 //simple examples for testing
