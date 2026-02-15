@@ -23,7 +23,8 @@
 //event groups
 #define EVT_NO_WATER        (1 << 0)
 #define EVT_WATER_PRESENT  (1 << 1)
-
+#define CONNECTING_NETWORK (1 << 2)
+#define NETWORK_CONNECTED (1 << 3)
 
 //simple examples for testing
 enum MessageType{

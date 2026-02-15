@@ -2,11 +2,10 @@
 #include "Fmutex.h"
 
 Network::Network(
-    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
+    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,EventGroupHandle_t event_group,TickType_t period,
     uint32_t stack_size,
     UBaseType_t priority) :
-    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),period(period){
-
+    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),event_group(event_group),period(period){
     xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr);
 }
 
@@ -38,8 +37,8 @@ void Network::task_impl() {
     IPStack ipstack(tls_client,cert_thingspeak,TLS_CLIENT_TIMEOUT_SECS);
     MQTTService mqtt(ipstack,HOSTNAME,PORT,MQTT_CLIENT_ID,sub_topic,pub_topic);
 
-    Fmutex mutex = Fmutex();
-    mutex.lock();
+
+    vTaskDelay(pdMS_TO_TICKS(100));
     if (!connect_wifi(ssid,pwd,ipstack)){
         printf("WIFI connection failed\n");
     }
@@ -53,10 +52,7 @@ void Network::task_impl() {
 
     vTaskDelay(pdMS_TO_TICKS(500));
     printf("mqtt connected\n");
-    mutex.unlock();
 
-    //publish a message to the MQTT broker for verification for MQTT connection
-    //mqtt_pub(mqtt,tem,hum);
 
     //check connection once in 15s
     const TickType_t period = pdMS_TO_TICKS(15000);
@@ -65,6 +61,7 @@ void Network::task_impl() {
     while(true) {
         //xQueueSendToBack(to_Control, &send_msg, pdMS_TO_TICKS(10));
         //xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));
+        EventBits_t bits = xEventGroupGetBits(event_group);
 
         while (xQueueReceive(to_Network,&received,pdMS_TO_TICKS(10))) {
             if (received.type == TEMP_RH){
@@ -72,10 +69,14 @@ void Network::task_impl() {
                 hum = received.rh;
                 printf("received %.2f\n",received.temp);
                 printf("received %.2f\n",received.rh);
-                mqtt_pub(mqtt,tem,hum);
+                //alarm is 1 if either or both of the alarm is on. If none of the alarm is on, then alarm is 0.
+                uint8_t alarm = !!(bits & (EVT_NO_WATER | EVT_WATER_PRESENT));
+                printf("alarm %u\n",alarm);
+                mqtt_pub_tem_hum(mqtt,tem,hum,alarm);
             }
             else if (received.type == TARGET_RH){
                 printf("target rh received %u\n",received.target_rh);
+                mqtt_pub_set_rh(mqtt,received.target_rh);
             }
         }
 
@@ -109,7 +110,6 @@ void Network::task_impl() {
             printf("converted%u\n",set_hum);
             xQueueSendToBack(to_Control, &send_msg, pdMS_TO_TICKS(10));
             xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));
-
         }
 
         //yield. socket that client uses calls cyw43_arch_poll()
@@ -135,10 +135,18 @@ int Network::disconnect_wifi(IPStack &ip_stack){
     return rc;
 }
 
-void Network::mqtt_pub(MQTTService& mqtt, double tem, double hum)
+void Network::mqtt_pub_tem_hum(MQTTService& mqtt, double tem, double hum,uint8_t alarm)
 {
     //publish a message to the MQTT broker for verification fo MQTT connection
     char msg[256];
-    snprintf(msg,sizeof(msg), R"(field1=%f&field2=%f&status=MQTTPUBLISH)",tem,hum);
+    snprintf(msg,sizeof(msg), R"(field1=%f&field2=%f&field4=%u&status=MQTTPUBLISH)",tem,hum,alarm);
+    mqtt.publish(msg);
+}
+
+void Network::mqtt_pub_set_rh(MQTTService& mqtt, uint8_t set_rh)
+{
+    //publish a message to the MQTT broker for verification fo MQTT connection
+    char msg[256];
+    snprintf(msg,sizeof(msg), R"(field3=%u&status=MQTTPUBLISH)",set_rh);
     mqtt.publish(msg);
 }
