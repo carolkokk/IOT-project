@@ -56,25 +56,20 @@ bool TlsClient::tls_connect(const char* hostname, const uint8_t *cert, size_t ce
     if (!ok) {
         printf("open failed\n");
         return false;
-    }
+    } else
+    {
+        while (!tls_client_is_connected(state) && !tls_client_is_complete(state)) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
 
-    int elapsed = 0;
-    const int timeout_ms = 10000;
-    bool complete = false;
-    bool connected = false;
-    while (elapsed < timeout_ms && !complete) {
-        connected = tls_client_is_connected(state);
-        complete = tls_client_is_complete(state);
-        vTaskDelay(pdMS_TO_TICKS(10));
-        elapsed += 10;
+        if (!tls_client_is_connected(state)) {
+            printf("connect failed, err=%d\n", tls_client_get_error(state));
+            return false;
+        } else {
+            printf("TLS connected\n");
+            tls_connected = true;
+        }
     }
-
-    if (!connected) {
-        printf("connect failed, err=%d\n", tls_client_get_error(state));
-        return false;
-    }
-    printf("TLS connected\n");
-    tls_connected = true;
     return true;
 }
 
