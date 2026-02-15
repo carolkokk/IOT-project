@@ -1,9 +1,10 @@
 import json
 import paho.mqtt.client as mqtt
 import time
-from flask import Flask, send_from_directory,jsonify, request
+from flask import Flask, send_from_directory,jsonify, request, Response
 from dotenv import load_dotenv
 import os
+import queue
 
 load_dotenv()
 app = Flask(__name__)
@@ -18,6 +19,7 @@ CLIENT_ID = os.getenv("CLIENT_ID")
 SUB_TOPIC = f"channels/{CHANNEL_ID}/subscribe"
 PUB_TOPIC = f"channels/{CHANNEL_ID}/publish"
 
+alert_queues: list[queue.Queue] = []
 
 @app.get("/")
 def home():
@@ -33,6 +35,25 @@ def get_messages():
         data = json.load(file)
     return jsonify(data)
 
+@app.get("/events")
+def events():
+    def stream():
+        q = queue.Queue()
+        alert_queues.append(q)
+        try:
+            while True:
+                try:
+                    msg = q.get(timeout=25)
+                    yield f"data: {msg}\n\n"
+                except queue.Empty:
+                    yield ": heartbeat\n\n"
+        except GeneratorExit:
+            alert_queues.remove(q)
+
+    return Response(stream(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.post("/setpoint")
 def setpoint():
     body = request.get_json(force=True)
@@ -46,16 +67,49 @@ def setpoint():
     mqtt_client.publish(publish_topic, payload)
     return ("OK", 200)
 
+@app.get("/getsetpoint")
+def getsetpoint():
+    return jsonify({"setpoint": current_setpoint})
+
+def broadcast_alert(alert_value: int):
+    if alert_value == 1:
+        text = "Water Sensor Alarm ON - Check your device!"
+    else:
+        text = ""
+
+    msg = json.dumps({"alert": alert_value, "text": text, "t": int(time.time() * 1000)})
+    for q in list(alert_queues):
+        q.put(msg)
+
 def on_connect(client, userdata, flags, rc):
     print("MQTT connected ",rc)
     client.subscribe(SUB_TOPIC)
 
+current_setpoint = "--"
 def on_message(client, userdata, msg):
+    global current_setpoint
     payload = msg.payload.decode()
     print("MQTT received: ",payload)
     try:
         data_json = json.loads(payload)
 
+        #field 3 set_rh display
+        field3 = data_json.get("field3")
+        if field3 is not None and str(field3).strip() != "":
+            current_setpoint = field3
+            print(f"Setpoint updated: {current_setpoint}")
+
+        #field 4 alarm handling
+        field4 = data_json.get("field4")
+        if field4 is not None and str(field4).strip() != "":
+            try:
+                alert_val = int(float(field4))
+                print(f"Alert field4={alert_val}")
+                broadcast_alert(alert_val)
+            except ValueError:
+                pass
+
+        #field 1 & 2 temp and hum sensor value
         if is_sensor_update(data_json):
             temp = float(data_json.get("field1", 0))
             hum  = float(data_json.get("field2", 0))
@@ -104,4 +158,4 @@ mqtt_client.loop_start()
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=3000, debug=True)
+    app.run(host="127.0.0.1", port=3000, debug=False)
