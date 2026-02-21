@@ -13,3 +13,4 @@ CMakeFiles/
 .settings/
 
 .DS_Store
+.env
