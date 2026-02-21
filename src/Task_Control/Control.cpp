@@ -37,7 +37,7 @@ void Control::task_impl() {
     //test structure where Control sends a number to both UI and Network
     TickType_t lastWakeTime = xTaskGetTickCount();
     Message send_numbers{};
-    send_numbers.type = TEST_NUMBER;
+    //send_numbers.type = TEST_NUMBER;
     send_numbers.number = 0;
     Message received{};
 
@@ -50,13 +50,13 @@ void Control::task_impl() {
         //xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
 
         while (xQueueReceive(to_Control,&received,pdMS_TO_TICKS(10))) {
-            if (received.type == TEST_STRING){
+            /*if (received.type == TEST_STRING){
                 printf("received %s\n",received.string);
             }else if (received.type == TEST_NUMBER)
             {
                 printf("received %u\n",received.number);
-            }
-            else if (received.type == TARGET_RH) {
+            }*/
+            if (received.type == TARGET_RH) {
                 printf("New target rh: %d\n", static_cast<uint8_t>(received.target_rh));
                 set_rh = static_cast<uint8_t>(received.target_rh);
                 printf("set_rh in control task: %d\n", set_rh);

@@ -13,10 +13,9 @@
 
 //simple examples for testing
 enum MessageType{
-    TEST_NUMBER,
-    TEST_STRING,
     TEMP_RH,
     TARGET_RH,
+    NETWORK_INFO,
 };
 
 //combine message type and data

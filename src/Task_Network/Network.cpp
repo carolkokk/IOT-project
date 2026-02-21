@@ -62,6 +62,9 @@ void Network::task_impl() {
     const TickType_t period = pdMS_TO_TICKS(15000);
     TickType_t next_check = xTaskGetTickCount() + period;
 
+    // this is for network scanning
+    bool scan_in_progress = false;
+
     while(true) {
         //xQueueSendToBack(to_Control, &send_msg, pdMS_TO_TICKS(10));
         //xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));

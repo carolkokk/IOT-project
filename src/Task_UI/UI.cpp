@@ -43,7 +43,7 @@ void UI::task_impl() {
     TickType_t lastWakeTime = xTaskGetTickCount();
     Message send{};
     Message received{};
-    send.type = TEST_STRING;
+    //send.type = TEST_STRING;
     strncpy(send.string, "Test string from UI task.", sizeof(send.string)-1);
     send.string[sizeof(send.string)-1] = '\0';
 
