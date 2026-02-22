@@ -50,7 +50,7 @@ void Control::task_impl() {
     TickType_t lastWakeTime = xTaskGetTickCount();
     Message send_numbers{};
     //send_numbers.type = TEST_NUMBER;
-    send_numbers.number = 0;
+    //send_numbers.number = 0;
     Message received{};
 
     //testing temp sensor data communication to UI

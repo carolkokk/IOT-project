@@ -21,7 +21,9 @@
 
 class Network {
 public:
-    Network(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,EventGroupHandle_t event_group,TickType_t period, uint32_t stack_size = 2048, UBaseType_t priority = tskIDLE_PRIORITY + 1);
+    Network(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
+            EventGroupHandle_t event_group,TickType_t period,
+            uint32_t stack_size = 2048, UBaseType_t priority = tskIDLE_PRIORITY + 1);
     static void task_wrap(void *pvParameters);
 
 private:
@@ -30,10 +32,18 @@ private:
     int disconnect_wifi(IPStack &ip_stack);
     void mqtt_pub_tem_hum(MQTTService& mqtt, double tem, double hum,uint8_t alarm);
     void mqtt_pub_set_rh(MQTTService& mqtt, uint8_t set_rh);
+
+    //for network scanning
+    void do_scan(MQTTService &mqtt);
+    static int scan_result(void *env, const cyw43_ev_scan_result_t *result);
+    Scan_result scan_results[MAX_SCAN_RESULTS];
+    uint8_t result_count = 0;
+
     const char *name = "NETWORK";
     QueueHandle_t to_UI;
     QueueHandle_t to_Network;
     QueueHandle_t to_Control;
+    QueueHandle_t scan_results_queue;
     TickType_t period;
     bool wifi_connected = false;
     bool mqtt_connected = false;

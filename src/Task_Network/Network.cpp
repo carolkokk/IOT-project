@@ -2,10 +2,12 @@
 #include "Fmutex.h"
 
 Network::Network(
-    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,EventGroupHandle_t event_group,TickType_t period,
+    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
+    EventGroupHandle_t event_group,TickType_t period,
     uint32_t stack_size,
     UBaseType_t priority) :
-    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),event_group(event_group),period(period){
+    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),
+    event_group(event_group),period(period){
     xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr);
 }
 
@@ -115,6 +117,21 @@ void Network::task_impl() {
             xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));
         }
 
+        // check if scan start bit is set and scan networks
+        if (bits & START_SCAN) {
+            xEventGroupClearBits(event_group, START_SCAN);
+            do_scan(mqtt);
+
+            bits = xEventGroupGetBits(event_group);
+        }
+
+        if (bits & SCAN_DONE) {
+            Scan_result_msg msg{};
+            msg.result_count = result_count;
+            memcpy(msg.results, scan_results, sizeof(Scan_result) * result_count);
+            xQueueSendToBack(scan_results_queue, &msg, pdMS_TO_TICKS(10));
+        }
+
         //yield. socket that client uses calls cyw43_arch_poll()
         mqtt.loop(10);
 
@@ -152,4 +169,54 @@ void Network::mqtt_pub_set_rh(MQTTService& mqtt, uint8_t set_rh)
     char msg[256];
     snprintf(msg,sizeof(msg), R"(field3=%u&status=MQTTPUBLISH)",set_rh);
     mqtt.publish(msg);
+}
+
+void Network::do_scan(MQTTService &mqtt) {
+    result_count = 0;
+
+    cyw43_wifi_scan_options_t scan_options = {0};
+    int err = cyw43_wifi_scan(&cyw43_state, &scan_options, this, scan_result);
+    if (err != 0) {
+        printf("Failed to start scan (%d)\n", err);
+        return;
+    }
+
+    printf("Scanning networks...\n");
+    //polling until scan is done
+    while (cyw43_wifi_scan_active(&cyw43_state)) {
+        cyw43_arch_poll();
+        // not sure if this is needed yet but this is to keep mqtt alive during polling
+        mqtt.loop(10);
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    printf("Scanning complete. %u networks found\n", result_count);
+
+    // sending event bit that scan is done and data can be sent to queue
+    xEventGroupSetBits(event_group, SCAN_DONE);
+}
+
+int Network::scan_result(void *env, const cyw43_ev_scan_result_t *result) {
+    if (!result) return 0;
+    auto *netw_scan = static_cast<Network*>(env);
+
+    //filter out duplicate networks
+    for (const auto &existing : netw_scan->scan_results) {
+        for (int i = 0; i < netw_scan->result_count; i++) {
+            if (memcmp(netw_scan->scan_results[i].bssid, result->bssid, 6) == 0) {
+                return 0;
+            }
+        }
+    }
+
+    //array full
+    if (netw_scan->result_count >= MAX_SCAN_RESULTS) return 0;
+    
+    Scan_result &res = netw_scan->scan_results[netw_scan->result_count++];
+    strncpy(res.ssid, reinterpret_cast<const char *>(result->ssid), result->ssid_len);
+    res.ssid[result->ssid_len] = '\0';
+    res.auth_mode = result->auth_mode;
+    memcpy(res.bssid, result->bssid, 6);
+
+    return 0;
 }
