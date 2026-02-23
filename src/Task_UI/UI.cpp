@@ -462,6 +462,7 @@ void UI::keyboard_cb(lv_event_t *e) {
         msg.type = NETWORK_CREDENTIALS;
         msg.credentials = ui->credentials;
         xQueueSendToBack(ui->to_Network, &msg, portMAX_DELAY);
+        xEventGroupSetBits(ui->event_group, CONNECTING_NETWORK);
 
         ui->navigate_to(MAIN);
     } else if (code == LV_EVENT_CANCEL) {

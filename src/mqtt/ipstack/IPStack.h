@@ -18,6 +18,7 @@
 class IPStack {
 public:
     IPStack(TlsClient& tls, const uint8_t *cert, int timeout);
+    bool init();
     bool connect_WiFi(const char* ssid, const char* password, int max_retries);
     bool WiFi_connected();
     void disconnect_WiFi();

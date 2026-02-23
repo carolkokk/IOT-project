@@ -16,9 +16,11 @@
 
 
 IPStack::IPStack(TlsClient& tls, const uint8_t *cert, int timeout)
-    : tls_client(tls),cert(cert),timeout(timeout),wifi_connected{false} {}
+    : tls_client(tls),cert(cert),timeout(timeout),wifi_connected{false}{
+    init();
+}
 
-bool IPStack::connect_WiFi(const char* ssid, const char* password, int max_retries){
+bool IPStack::init(){
     static bool initialized = false;
 
     //initialization
@@ -30,7 +32,13 @@ bool IPStack::connect_WiFi(const char* ssid, const char* password, int max_retri
         initialized = true;
         cyw43_arch_enable_sta_mode();
     }
+    return true;
+}
 
+bool IPStack::connect_WiFi(const char* ssid, const char* password, int max_retries){
+    if (!init()){
+        return false;
+    }
     DEBUG_printf("Connecting to Wi-Fi...\n");
     for (int retry = 0; retry < max_retries; retry++){
         if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, CYW43_AUTH_WPA2_AES_PSK, 10000)) {

@@ -24,8 +24,8 @@ void Network::task_impl() {
     //send_msg.type = TEST_STRING;
     //strncpy(send_msg.string, "Test string from Network task.", sizeof(send_msg.string)-1);
     //send_msg.string[sizeof(send_msg.string)-1] = '\0';
-    char ssid[] = WIFI_SSID;
-    char pwd[] = WIFI_PASSWORD;
+    char ssid[32];
+    char pwd[32];
     //fake tem and hum data for testing
     double tem = 20.00;
     double hum = 45.00;
@@ -41,20 +41,6 @@ void Network::task_impl() {
 
 
     vTaskDelay(pdMS_TO_TICKS(100));
-    if (!connect_wifi(ssid,pwd,ipstack)){
-        printf("WIFI connection failed\n");
-    }
-
-    printf("Subscribing topic: %s\n", sub_topic);
-    if (!mqtt.connect_and_subscribe()){
-        printf("MQTT connection failed\n");
-    }else{
-        mqtt_connected = true;
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(500));
-    printf("mqtt connected\n");
-
 
     //check connection once in 15s
     const TickType_t period = pdMS_TO_TICKS(15000);
@@ -64,67 +50,17 @@ void Network::task_impl() {
     bool scan_in_progress = false;
 
     while(true) {
-        //xQueueSendToBack(to_Control, &send_msg, pdMS_TO_TICKS(10));
-        //xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));
         EventBits_t bits = xEventGroupGetBits(event_group);
-
-        while (xQueueReceive(to_Network,&received,pdMS_TO_TICKS(10))) {
-            if (received.type == TEMP_RH){
-                tem = received.temp;
-                hum = received.rh;
-                printf("received %.2f\n",received.temp);
-                printf("received %.2f\n",received.rh);
-                //alarm is 1 if either or both of the alarm is on. If none of the alarm is on, then alarm is 0.
-                uint8_t alarm = !!(bits & (EVT_NO_WATER | EVT_WATER_PRESENT));
-                printf("alarm %u\n",alarm);
-                mqtt_pub_tem_hum(mqtt,tem,hum,alarm);
-            }
-            else if (received.type == TARGET_RH){
-                printf("target rh received %u\n",received.target_rh);
-                mqtt_pub_set_rh(mqtt,received.target_rh);
-            }
-        }
-
-        //check if MQTT is connected in every 5s.
-        if ((int32_t)(xTaskGetTickCount()-next_check) >= 0) {
-            if (ipstack.WiFi_connected()){
-                next_check += period;
-                if (!mqtt.isConnected()) {
-                    printf("Not connected... reconnecting\n");
-                    mqtt_connected = false;
-
-                    mqtt.disconnect();
-                    ipstack.disconnect();
-                    if (mqtt.connect_and_subscribe())
-                    {
-                        mqtt_connected = true;
-                    };
-                }
-            }else{
-                printf("wifi is not connected. Reconnecting\n");
-                disconnect_wifi(ipstack);
-                connect_wifi(ssid,pwd,ipstack);
-            }
-        }
-
-        //get message from the subscribed field3 for set humidity level
-        if (mqtt.get_Message(payload)) {
-            auto set_hum = static_cast<uint8_t> (std::stoi(payload));
-            send_msg.type = TARGET_RH;
-            send_msg.target_rh = set_hum;
-            printf("converted%u\n",set_hum);
-            xQueueSendToBack(to_Control, &send_msg, pdMS_TO_TICKS(10));
-            xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));
-        }
 
         // check if scan start bit is set and scan networks
         if (bits & START_SCAN) {
             xEventGroupClearBits(event_group, START_SCAN);
-            do_scan(mqtt);
+            do_scan();
 
             bits = xEventGroupGetBits(event_group);
         }
 
+        //send scan results (wifi ssids) to UI
         if (bits & SCAN_DONE) {
             xEventGroupClearBits(event_group, SCAN_DONE);
             Scan_result_msg msg{};
@@ -133,27 +69,123 @@ void Network::task_impl() {
             xQueueSendToBack(scan_results_queue, &msg, pdMS_TO_TICKS(10));
         }
 
-        //yield. socket that client uses calls cyw43_arch_poll()
-        mqtt.loop(10);
+        //check if UI wants to connect to the internet with pwd.
+        if (bits & CONNECTING_NETWORK){
+            //first clear possible remaining connections and clear network connected bit
+            disconnect_internet(ipstack,mqtt);
+            vTaskDelay(pdMS_TO_TICKS(100));
+            xEventGroupClearBits(event_group, NETWORK_CONNECTED);
+
+            while (xQueueReceive(to_Network,&received,pdMS_TO_TICKS(100)) && received.type == NETWORK_CREDENTIALS){
+                //copy ssid and pwd from ui
+                strncpy(ssid, received.credentials.ssid, sizeof(ssid) - 1);
+                ssid[sizeof(ssid) - 1] = '\0';
+                strncpy(pwd, received.credentials.pass, sizeof(pwd) - 1);
+                pwd[sizeof(pwd) - 1] = '\0';
+                printf("received ssid:%s password:%s\n",ssid,pwd);
+
+                if (connect_internet(ssid,pwd,ipstack,mqtt)){
+                    xEventGroupSetBits(event_group, NETWORK_CONNECTED);
+                    next_check = xTaskGetTickCount() + period;
+                }
+            }
+            xEventGroupClearBits(event_group, CONNECTING_NETWORK);
+        }
+
+        if (bits & NETWORK_CONNECTED){
+            while (xQueueReceive(to_Network,&received,pdMS_TO_TICKS(10))) {
+                if (received.type == TEMP_RH){
+                    tem = received.temp;
+                    hum = received.rh;
+                    printf("received %.2f\n",received.temp);
+                    printf("received %.2f\n",received.rh);
+                    //alarm is 1 if either or both of the alarm is on. If none of the alarm is on, then alarm is 0.
+                    uint8_t alarm = !!(bits & (EVT_NO_WATER | EVT_WATER_PRESENT));
+                    printf("alarm %u\n",alarm);
+                    mqtt_pub_tem_hum(mqtt,tem,hum,alarm);
+                }
+                else if (received.type == TARGET_RH){
+                    printf("target rh received %u\n",received.target_rh);
+                    mqtt_pub_set_rh(mqtt,received.target_rh);
+                }
+            }
+
+            //check if MQTT is connected in every 15s.
+            check_and_reconnect(ipstack,mqtt,ssid,pwd,event_group,next_check,period);
+
+            //get message from the subscribed field3 for set humidity level
+            if (mqtt.get_Message(payload)) {
+                auto set_hum = static_cast<uint8_t> (std::stoi(payload));
+                send_msg.type = TARGET_RH;
+                send_msg.target_rh = set_hum;
+                printf("converted%u\n",set_hum);
+                xQueueSendToBack(to_Control, &send_msg, pdMS_TO_TICKS(10));
+                xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));
+            }
+
+
+            //yield. socket that client uses calls cyw43_arch_poll()
+            mqtt.loop(10);
+        }
 
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
-bool Network::connect_wifi(const char* ssid, const char* pwd, IPStack& ipstack)
-{
+bool Network::connect_internet(const char* ssid, const char* pwd, IPStack& ipstack,MQTTService& mqtt){
+    //disconnect possible remaining connections
+    disconnect_internet(ipstack,mqtt);
+    wifi_connected = false;
+    mqtt_connected = false;
     if (!ipstack.connect_WiFi(ssid, pwd, 5)) {
         printf("WiFi connect failed.\n");
         return false;
     }
+    if (!mqtt.connect_and_subscribe()){
+        printf("MQTT connection failed\n");
+        ipstack.disconnect();
+        return false;
+    }
+    vTaskDelay(pdMS_TO_TICKS(500));
+    mqtt_connected = true;
     wifi_connected = true;
     return true;
+}
+
+int Network::disconnect_internet(IPStack& ipstack, MQTTService& mqtt){
+    mqtt.disconnect();
+    int rc = disconnect_wifi(ipstack);
+    mqtt_connected = false;
+    wifi_connected = false;
+    return rc;
 }
 
 int Network::disconnect_wifi(IPStack &ip_stack){
     ip_stack.disconnect_WiFi();
     int rc = ip_stack.disconnect();
     return rc;
+}
+
+void Network::check_and_reconnect(IPStack& ipstack, MQTTService& mqtt, const char* ssid, const char* pwd, EventGroupHandle_t event_group, TickType_t& next_check, TickType_t period){
+    if ((int32_t)(xTaskGetTickCount() - next_check) >= 0) {
+        next_check += period;
+        printf("Checking internet connection\n");
+
+        if (!ipstack.WiFi_connected() || !mqtt.isConnected()) {
+            xEventGroupClearBits(event_group, NETWORK_CONNECTED);
+            xEventGroupSetBits(event_group, CONNECTING_NETWORK);
+            vTaskDelay(pdMS_TO_TICKS(200));
+            printf("Not connected... reconnecting\n");
+            disconnect_internet(ipstack, mqtt);
+            vTaskDelay(pdMS_TO_TICKS(100));
+
+            if (connect_internet(ssid, pwd, ipstack, mqtt)) {
+                printf("reconnection successful\n");
+                xEventGroupSetBits(event_group, NETWORK_CONNECTED);
+                xEventGroupClearBits(event_group, CONNECTING_NETWORK);
+            }
+        }
+    }
 }
 
 void Network::mqtt_pub_tem_hum(MQTTService& mqtt, double tem, double hum,uint8_t alarm)
@@ -172,7 +204,7 @@ void Network::mqtt_pub_set_rh(MQTTService& mqtt, uint8_t set_rh)
     mqtt.publish(msg);
 }
 
-void Network::do_scan(MQTTService &mqtt) {
+void Network::do_scan() {
     result_count = 0;
 
     cyw43_wifi_scan_options_t scan_options = {0};
@@ -186,8 +218,6 @@ void Network::do_scan(MQTTService &mqtt) {
     //polling until scan is done
     while (cyw43_wifi_scan_active(&cyw43_state)) {
         cyw43_arch_poll();
-        // not sure if this is needed yet but this is to keep mqtt alive during polling
-        mqtt.loop(10);
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 

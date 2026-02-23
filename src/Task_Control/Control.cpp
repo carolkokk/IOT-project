@@ -63,6 +63,7 @@ void Control::task_impl() {
 
         bool dehum_water_alarm  = !dehum_water_sensor.Read();
         bool humidifier_water_alarm     = humidifier_water_sensor.Read();
+        EventBits_t bits = xEventGroupGetBits(event_group);
 
         // dehumidifier water alarm, triggers when water is detected
         if (dehum_water_alarm) {
@@ -101,7 +102,9 @@ void Control::task_impl() {
         temp_rh.temp = std::round(rh_sensor.read_temp() * 100.0) / 100.0;
         temp_rh.rh = std::round(rh_sensor.read_rh() * 100.0) / 100.0;
         xQueueSendToBack(to_UI, &temp_rh, pdMS_TO_TICKS(100));
-        xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));
+        if (bits & NETWORK_CONNECTED){
+            xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));
+        }
 
 
         if (!humidifier_water_alarm && !dehum_water_alarm){
