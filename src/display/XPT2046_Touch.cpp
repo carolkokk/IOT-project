@@ -5,7 +5,7 @@
 #include "XPT2046_Touch.h"
 
 #define Z_THRESHOLD 200
-#define MS_THRESHOLD 10
+#define MS_THRESHOLD 40
 
 XPT2046_Touch::XPT2046_Touch(PicoSPIDevice *spi_device)
                             :spi_dev(spi_device),
@@ -111,6 +111,21 @@ void XPT2046_Touch::update() {
         tx[0] = 0xD0;
         spi_dev->transaction(tx, rx, 3);
         data[5] = (((rx[1] << 8) | rx[2]) >> 3) & 0x0FFF;
+
+        tx[0] = 0xB1;
+        spi_dev->transaction(tx, rx, 3);
+        uint16_t z1_confirm = ((rx[1] << 8) | rx[2]) >> 3 & 0x0FFF;
+        if (z1_confirm < Z_THRESHOLD) {
+            zraw = 0;
+            spi_dev->set_cs(1);
+            return;
+        }
+    } else {
+        zraw = 0;
+        xraw = 0;
+        yraw = 0;
+        spi_dev->set_cs(1);
+        return;
     }
     spi_dev->set_cs(1);
 
@@ -133,16 +148,16 @@ void XPT2046_Touch::update() {
     msraw = now;
     switch (rotation) {
         case 0:
-            xraw = 4095 - y;
-            yraw = x;
-            break;
-        case 1:
             xraw = x;
             yraw = y;
             break;
-        case 2:
+        case 1:
             xraw = y;
-            yraw = 4095 - x;
+            yraw = x;
+            break;
+        case 2:
+            xraw = 4095 - x;
+            yraw = y;
             break;
         default: // 3
             xraw = 4095 - x;

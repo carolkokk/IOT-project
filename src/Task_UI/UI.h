@@ -113,6 +113,9 @@ private:
     Screens screen_history[5];
     int screen_depth = 0;
 
+    bool network_connected = false;
+    bool networks_loaded = false;
+
     // lvgl UI elements
     lv_obj_t *temp_label;
     lv_obj_t *rh_label;
@@ -126,8 +129,9 @@ private:
     lv_obj_t * slider_label;
 
     lv_obj_t *network_list;
+    lv_obj_t *network_status_label;
     lv_obj_t *current_network_name_label;
-    lv_obj_t *password_textarea = nullptr;
+    lv_obj_t *password_textarea;
 };
 
 #endif //UI_H

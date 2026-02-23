@@ -12,11 +12,24 @@
 
 extern LVGLPort *g_lvgl_port;
 
+// for now calibration values depend on the display
+#define DISPLAY28
+//#define DISPLAY24
+
 // calibration values for decting touch
+#ifdef DISPLAY28
 #define TOUCH_X_MIN 340
 #define TOUCH_X_MAX 3860
 #define TOUCH_Y_MIN 275
 #define TOUCH_Y_MAX 3890
+#endif
+
+#ifdef DISPLAY24
+#define TOUCH_X_MIN  285
+#define TOUCH_X_MAX  3951
+#define TOUCH_Y_MIN  414
+#define TOUCH_Y_MAX  3840
+#endif
 
 UI::UI(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
@@ -42,9 +55,6 @@ void UI::task_impl() {
     TickType_t lastWakeTime = xTaskGetTickCount();
     Message send{};
     Message received{};
-    //send.type = TEST_STRING;
-    /*strncpy(send.string, "Test string from UI task.", sizeof(send.string)-1);
-    send.string[sizeof(send.string)-1] = '\0';*/
 
     sensor_data.temp = 0.0;
     sensor_data.rh = 0.0;
@@ -81,6 +91,7 @@ void UI::task_impl() {
             if (current_screen == AVAILABLE_NETWORKS) {
                 lv_obj_clean(lv_screen_active());
                 load_available_networks(scan_msg);
+                networks_loaded = true;
             }
         }
 
@@ -131,6 +142,7 @@ void UI::task_impl() {
                     load_preset_screen();
                     break;
                 case NETWORK:
+                    networks_loaded = false;
                     load_network_screen();
                     break;
                 case AVAILABLE_NETWORKS: {
@@ -172,7 +184,7 @@ void UI::init_UI() {
     // irq is enabled and rotation is set for touch
     touch = std::make_shared<XPT2046_Touch>(touch_device.get());
     //touch->begin();
-    touch->setRotation(3);
+    touch->setRotation(0);
 
     //touch integration for lvgl
     lvgl_touch = std::make_shared<LVGLTouch>(touch.get(), 320, 240);
@@ -198,13 +210,13 @@ void UI::load_main_screen(Message received, bool initial) {
         // humidity label
         rh_label = lv_label_create(lv_screen_active());
         lv_obj_set_pos(rh_label, 20, 30);
-        lv_obj_set_style_text_color(rh_label, lv_color_hex(0x7d1e14), 0);
+        lv_obj_set_style_text_color(rh_label, lv_color_white(), 0);
         lv_obj_set_style_text_font(rh_label, &lv_font_montserrat_24, 0);
 
         // temperature label
         temp_label = lv_label_create(lv_screen_active());
         lv_obj_set_pos(temp_label, 43, 70);
-        lv_obj_set_style_text_color(temp_label, lv_color_hex(0x7d1e14), 0);
+        lv_obj_set_style_text_color(temp_label, lv_color_white(), 0);
         lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_24, 0);
 
         // dropdown menu test
@@ -229,13 +241,6 @@ void UI::load_main_screen(Message received, bool initial) {
         //adding callback to react to different menu selection items
         lv_obj_add_event_cb(dd, dd_menu_callback, LV_EVENT_VALUE_CHANGED, this);
 
-        // creating led for indicating water tank
-        /*
-        led  = lv_led_create(lv_screen_active());
-        //lv_color_t blue = lv_color_make(64, 125, 237);
-        lv_led_set_color(led, lv_color_white());
-        lv_obj_align(led, LV_ALIGN_LEFT_MID, 20, 10);
-        lv_led_on(led);*/
         tank_label = lv_label_create(lv_screen_active());
         lv_obj_set_style_text_color(tank_label, lv_color_white(), 0);
         lv_label_set_text(tank_label, LV_SYMBOL_TINT);
@@ -300,7 +305,7 @@ void UI::load_rh_set_screen(uint8_t target_rh) {
     // button to open pre-set page
     create_button(preset_btn_event_cb, LV_ALIGN_CENTER, 0, 0, "CHOOSE PRESET");
     // button to cancel
-    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 0, -10, " < ");
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
 
 void UI::slider_event_cb(lv_event_t* e) {
@@ -352,7 +357,7 @@ void UI::load_preset_screen() {
     }
 
     create_button(save_preset_btn_callback, LV_ALIGN_BOTTOM_MID, 0, -20, "SAVE");
-    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 10, -10, " < ");
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
 
 void UI::preset_selection_cb(lv_event_t *e) {
@@ -377,10 +382,14 @@ void UI::save_preset_btn_callback(lv_event_t *e) {
     ui->rh_val_saved = true;
 }
 
-
 void UI::load_network_screen() {
-    create_button(search_networks_btn_cb, LV_ALIGN_BOTTOM_MID, 0, -10, "NEW CONNECTION");
-    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 10, -10, " < ");
+    network_status_label = lv_label_create(lv_screen_active());
+    const char *status = network_connected ? "Status: CONNECTED" : "Status: DISCONNECTED";
+    lv_label_set_text(network_status_label,  status);
+    lv_obj_set_style_text_color(network_status_label, lv_color_white(), 0);
+    lv_obj_align(network_status_label, LV_ALIGN_TOP_MID, 0, 20);
+    create_button(search_networks_btn_cb, LV_ALIGN_TOP_MID, 0, 120, "NEW CONNECTION");
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
 
 void UI::search_networks_btn_cb(lv_event_t *e) {
@@ -400,7 +409,7 @@ void UI::load_available_networks(Scan_result_msg &msg) {
         btn = lv_list_add_button(network_list, nullptr, msg.results[i].ssid);
         lv_obj_add_event_cb(btn, network_list_cb, LV_EVENT_CLICKED, this);
     }
-    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 10, -10, "< ");
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, "< ");
 }
 
 void UI::network_list_cb(lv_event_t *e) {

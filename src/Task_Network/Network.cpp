@@ -126,6 +126,7 @@ void Network::task_impl() {
         }
 
         if (bits & SCAN_DONE) {
+            xEventGroupClearBits(event_group, SCAN_DONE);
             Scan_result_msg msg{};
             msg.result_count = result_count;
             memcpy(msg.results, scan_results, sizeof(Scan_result) * result_count);
