@@ -50,7 +50,7 @@ void LVGLTouch::read(lv_indev_data_t *data) {
     touch->readData(&raw_x, &raw_y, &raw_z);  // calls update() once
 
     if (raw_z >= 400) {
-        printf("RAW: x=%d, y=%d\n", raw_x, raw_y);
+        //printf("RAW: x=%d, y=%d\n", raw_x, raw_y);
         data->point.x = mapX(raw_x);
         data->point.y = mapY(raw_y);
         data->state = LV_INDEV_STATE_PRESSED;

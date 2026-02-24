@@ -23,6 +23,14 @@ enum Screens {
     ENTER_PASS,
 };
 
+struct System_Status {
+    bool initial_main = false;
+    bool connecting_network = false;
+    bool network_connected = false;
+    bool water_overflow = false;
+    bool refill_water = false;
+};
+
 struct Preset_Options {
     const char* name;
     uint8_t rh_val;
@@ -71,7 +79,8 @@ private:
     //uint8_t target_rh = 50;
 
     // functions for loading different UI screens
-    void load_main_screen(Message received, bool initial);
+    void load_main_screen(Message received, System_Status status);
+    void update_main_screen(System_Status status);
     static void dd_menu_callback(lv_event_t* e);
 
     // functions for setting rh screens
@@ -92,7 +101,7 @@ private:
     static void save_preset_btn_callback(lv_event_t * e);
 
     // functions for network setting screens
-    void load_network_screen();
+    void load_network_screen(bool network_connected);
     static void search_networks_btn_cb(lv_event_t * e);
     void load_available_networks(Scan_result_msg &msg);
     static void network_list_cb(lv_event_t *e);
@@ -113,15 +122,15 @@ private:
     Screens screen_history[5];
     int screen_depth = 0;
 
-    bool network_connected = false;
     bool networks_loaded = false;
 
     // lvgl UI elements
     lv_obj_t *temp_label;
     lv_obj_t *rh_label;
     lv_obj_t *dropdown;
-    lv_obj_t *tank_label;
+    lv_obj_t *tank_icon;
     lv_obj_t *network_icon;
+    lv_obj_t *tank_status_label;
 
     lv_style_t style_radio;
     lv_style_t style_radio_chk;

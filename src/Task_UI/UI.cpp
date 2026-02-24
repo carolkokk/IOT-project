@@ -6,6 +6,7 @@
 #include <cstring>
 #include <sstream>
 #include <iomanip>
+#include <sys/stat.h>
 
 #include "PicoSPIBus.h"
 #include "PicoSPIDevice.h"
@@ -49,7 +50,7 @@ void UI::task_wrap(void *pvParameters) {
 
 void UI::task_impl() {
     // black background
-    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x55565c), 0);
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x4a5756), 0);
 
     //test structure where UI sends a message to both Network and control
     TickType_t lastWakeTime = xTaskGetTickCount();
@@ -64,10 +65,26 @@ void UI::task_impl() {
 
     current_screen = MAIN;
     screen_depth = 0;
-    load_main_screen(sensor_data, true);
+    System_Status sys_status;
+    sys_status.initial_main = true;
+    load_main_screen(sensor_data, sys_status);
+    bool prev_network_connected = false;
 
     while(true) {
         EventBits_t bits = xEventGroupGetBits(event_group);
+
+        bool now_connected = bits & NETWORK_CONNECTED;
+        bool now_connecting = bits & CONNECTING_NETWORK;
+
+        sys_status.network_connected = now_connected;
+        sys_status.connecting_network = now_connecting;
+
+        if (now_connected != prev_network_connected) {
+            prev_network_connected = now_connected;
+            if (current_screen == MAIN) {
+                update_main_screen(sys_status);
+            }
+        }
 
         while (xQueueReceive(to_UI,&received,pdMS_TO_TICKS(10))) {
             if (received.type == TEMP_RH) {
@@ -75,7 +92,8 @@ void UI::task_impl() {
                 sensor_data.rh = received.rh;
                 sensor_data.temp = received.temp;
                 if (current_screen == MAIN) {
-                    load_main_screen(sensor_data, false);
+                    sys_status.initial_main = false;
+                    load_main_screen(sensor_data, sys_status);
                 }
                 printf("UI received TEMP: %.2f\n", received.temp);
                 printf("UI received RH: %.2f\n", received.rh);
@@ -129,11 +147,11 @@ void UI::task_impl() {
 
             // cleans up current screen and sets blck background again before displayinf new screen
             lv_obj_clean(lv_screen_active());
-            lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x6e6a64), 0);
+            lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x4a5756), 0);
 
             switch (current_screen) {
                 case MAIN:
-                    load_main_screen(sensor_data, true);
+                    load_main_screen(sensor_data, sys_status);
                     break;
                 case SET_RH:
                     load_rh_set_screen(sensor_data.target_rh);
@@ -143,9 +161,11 @@ void UI::task_impl() {
                     break;
                 case NETWORK:
                     networks_loaded = false;
-                    load_network_screen();
+                    load_network_screen(sys_status.network_connected);
                     break;
                 case AVAILABLE_NETWORKS: {
+                    xEventGroupSetBits(event_group, START_SCAN);
+                    networks_loaded = false;
                     lv_obj_t *label = lv_label_create(lv_screen_active());
                     lv_label_set_text(label, "Searching for networks...");
                     lv_obj_set_style_text_color(label, lv_color_white(), 0);
@@ -194,28 +214,28 @@ void UI::init_UI() {
 }
 
 
-void UI::load_main_screen(Message received, bool initial) {
+void UI::load_main_screen(Message received, System_Status status) {
     //buffer for updating sensor data
     char buf[64];
 
-    if (initial) {
+    if (status.initial_main) {
         // a white rectangle for the background of displaying sensor info
         lv_obj_t *white_bck = lv_obj_create(lv_screen_active());
         lv_obj_set_size(white_bck, 170, 90);
-        lv_obj_set_pos(white_bck, 15, 20);
+        lv_obj_set_pos(white_bck, 15, 15);
         lv_obj_set_style_bg_color(white_bck, lv_color_hex(0xbfa782), 0);
         lv_obj_set_style_border_color(white_bck, lv_color_hex(0xb8945f), 0);
         lv_obj_set_style_arc_rounded(white_bck, 10, 0);
 
         // humidity label
         rh_label = lv_label_create(lv_screen_active());
-        lv_obj_set_pos(rh_label, 20, 30);
+        lv_obj_set_pos(rh_label, 25, 25);
         lv_obj_set_style_text_color(rh_label, lv_color_white(), 0);
         lv_obj_set_style_text_font(rh_label, &lv_font_montserrat_24, 0);
 
         // temperature label
         temp_label = lv_label_create(lv_screen_active());
-        lv_obj_set_pos(temp_label, 43, 70);
+        lv_obj_set_pos(temp_label, 48, 65);
         lv_obj_set_style_text_color(temp_label, lv_color_white(), 0);
         lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_24, 0);
 
@@ -241,19 +261,23 @@ void UI::load_main_screen(Message received, bool initial) {
         //adding callback to react to different menu selection items
         lv_obj_add_event_cb(dd, dd_menu_callback, LV_EVENT_VALUE_CHANGED, this);
 
-        tank_label = lv_label_create(lv_screen_active());
-        lv_obj_set_style_text_color(tank_label, lv_color_white(), 0);
-        lv_label_set_text(tank_label, LV_SYMBOL_TINT);
-        lv_obj_set_style_text_font(tank_label, &lv_font_montserrat_24, 0);
-        //lv_label_set_text(tank_label, "Water level OK");
-        lv_obj_set_pos(tank_label, 207, 60);
-        lv_obj_set_style_text_color(tank_label, lv_color_hex(0xe0ae67), 0);
-
         network_icon = lv_label_create(lv_screen_active());
         lv_label_set_text(network_icon, LV_SYMBOL_WIFI);
-        lv_obj_set_pos(network_icon, 200, 25);
+        lv_obj_set_pos(network_icon, 40, 150);
+
         lv_obj_set_style_text_font(network_icon, &lv_font_montserrat_24, 0);
-        lv_obj_set_style_text_color(network_icon, lv_color_hex(0x0040ff), 0);
+        lv_color_t wifi_status_color = status.network_connected ? lv_color_hex(0x18cc57) : lv_color_hex(0x0040ff);
+        lv_obj_set_style_text_color(network_icon, wifi_status_color, 0);
+
+        tank_icon = lv_label_create(lv_screen_active());
+        lv_obj_set_style_text_color(tank_icon, lv_color_white(), 0);
+        lv_label_set_text(tank_icon, LV_SYMBOL_TINT);
+        lv_obj_set_pos(tank_icon, 45, 115);
+        lv_obj_set_style_text_font(tank_icon, &lv_font_montserrat_24, 0);
+        //lv_label_set_text(tank_label, "Water level OK");
+
+        lv_obj_set_style_text_color(tank_icon, lv_color_hex(0xe0ae67), 0);
+
         /*network_status_label = lv_label_create(lv_screen_active());
         lv_obj_set_style_text_color(network_status_label, lv_color_white(), 0);
         lv_label_set_text(network_status_label, "Network CONN");
@@ -268,6 +292,16 @@ void UI::load_main_screen(Message received, bool initial) {
         lv_label_set_text(temp_label, buf);
     }
 }
+
+void UI::update_main_screen(System_Status status) {
+    // update wifi icon color
+    lv_color_t wifi_status_color = status.network_connected ? lv_color_hex(0x18cc57) : lv_color_hex(0x0040ff);
+    lv_obj_set_style_text_color(network_icon, wifi_status_color, 0);
+
+    // update
+
+}
+
 
 void UI::dd_menu_callback(lv_event_t* e) {
     auto ui = (UI*)lv_event_get_user_data(e);
@@ -382,26 +416,26 @@ void UI::save_preset_btn_callback(lv_event_t *e) {
     ui->rh_val_saved = true;
 }
 
-void UI::load_network_screen() {
+void UI::load_network_screen(bool network_connected) {
     network_status_label = lv_label_create(lv_screen_active());
     const char *status = network_connected ? "Status: CONNECTED" : "Status: DISCONNECTED";
     lv_label_set_text(network_status_label,  status);
     lv_obj_set_style_text_color(network_status_label, lv_color_white(), 0);
-    lv_obj_align(network_status_label, LV_ALIGN_TOP_MID, 0, 20);
+    lv_obj_align(network_status_label, LV_ALIGN_TOP_MID, 0, 30);
     create_button(search_networks_btn_cb, LV_ALIGN_TOP_MID, 0, 120, "NEW CONNECTION");
     create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
 
 void UI::search_networks_btn_cb(lv_event_t *e) {
     auto ui = (UI*)lv_event_get_user_data(e);
-    xEventGroupSetBits(ui->event_group, START_SCAN);
+    //xEventGroupSetBits(ui->event_group, START_SCAN);
     ui->navigate_to(AVAILABLE_NETWORKS);
 }
 
 void UI::load_available_networks(Scan_result_msg &msg) {
     network_list = lv_list_create(lv_screen_active());
     lv_obj_set_size(network_list, 250, 150);
-    lv_obj_center(network_list);
+    lv_obj_align(network_list, LV_ALIGN_TOP_MID, 0, 10);
 
     //add buttons to list
     lv_obj_t *btn;
@@ -426,13 +460,13 @@ void UI::network_list_cb(lv_event_t *e) {
 
 void UI::load_password_screen() {
     current_network_name_label = lv_label_create(lv_screen_active());
-    lv_obj_set_pos(current_network_name_label, 20, 10);
+    lv_obj_set_pos(current_network_name_label, 30, 20);
     lv_label_set_text(current_network_name_label, credentials.ssid);
     lv_obj_set_style_text_color(current_network_name_label, lv_color_white(), 0);
 
     // text area
     lv_obj_t *text_area = lv_textarea_create(lv_screen_active());
-    lv_obj_align(text_area, LV_ALIGN_TOP_MID, 10, 30);
+    lv_obj_align(text_area, LV_ALIGN_TOP_MID, 10, 45);
     lv_obj_set_size(text_area, 280, 20);
     lv_textarea_set_placeholder_text(text_area, "Password");
     lv_textarea_set_one_line(text_area, true);
@@ -474,8 +508,9 @@ void UI::create_button(lv_event_cb_t event_cb, lv_align_t align, int32_t x_ofs, 
     lv_obj_t* btn = lv_button_create(lv_screen_active());
     lv_obj_add_event_cb(btn, event_cb, LV_EVENT_CLICKED, this);
     lv_obj_align(btn, align, x_ofs, y_ofs);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x8fa4b0), 0);
-
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x2162cc), 0);
+    lv_obj_set_style_text_color(btn, lv_color_hex(0x83cdf2), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x2b64ad), 0);
     lv_obj_t* btn_label = lv_label_create(btn);
     lv_label_set_text(btn_label, text);
     lv_obj_center(btn_label);
