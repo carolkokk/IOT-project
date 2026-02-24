@@ -136,7 +136,9 @@ void UI::task_impl() {
             msg.type = TARGET_RH;
             msg.target_rh = sensor_data.target_rh;
             xQueueSendToBack(to_Control, &msg, portMAX_DELAY);
-            xQueueSendToBack(to_Network, &msg, portMAX_DELAY);
+            if (bits & NETWORK_CONNECTED){
+                xQueueSendToBack(to_Network, &msg, portMAX_DELAY);
+            }
 
             //next_screen = MAIN;
             navigate_back();

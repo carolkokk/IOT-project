@@ -76,19 +76,22 @@ void Network::task_impl() {
             vTaskDelay(pdMS_TO_TICKS(100));
             xEventGroupClearBits(event_group, NETWORK_CONNECTED);
 
-            while (xQueueReceive(to_Network,&received,pdMS_TO_TICKS(100)) && received.type == NETWORK_CREDENTIALS){
-                //copy ssid and pwd from ui
-                strncpy(ssid, received.credentials.ssid, sizeof(ssid) - 1);
-                ssid[sizeof(ssid) - 1] = '\0';
-                strncpy(pwd, received.credentials.pass, sizeof(pwd) - 1);
-                pwd[sizeof(pwd) - 1] = '\0';
-                printf("received ssid:%s password:%s\n",ssid,pwd);
+            while (xQueueReceive(to_Network,&received,portMAX_DELAY)){
+                if (received.type == NETWORK_CREDENTIALS){
+                    //copy ssid and pwd from ui
+                    strncpy(ssid, received.credentials.ssid, sizeof(ssid) - 1);
+                    ssid[sizeof(ssid) - 1] = '\0';
+                    strncpy(pwd, received.credentials.pass, sizeof(pwd) - 1);
+                    pwd[sizeof(pwd) - 1] = '\0';
+                    printf("received ssid:%s password:%s\n",ssid,pwd);
 
-                if (connect_internet(ssid,pwd,ipstack,mqtt)){
-                    xEventGroupSetBits(event_group, NETWORK_CONNECTED);
-                    next_check = xTaskGetTickCount() + period;
+                    if (connect_internet(ssid,pwd,ipstack,mqtt)){
+                        xEventGroupSetBits(event_group, NETWORK_CONNECTED);
+                        next_check = xTaskGetTickCount() + period;
+                    }
                 }
             }
+
             xEventGroupClearBits(event_group, CONNECTING_NETWORK);
         }
 

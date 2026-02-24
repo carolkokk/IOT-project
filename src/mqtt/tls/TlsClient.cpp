@@ -85,7 +85,9 @@ int TlsClient::tls_close()
 
     if (!state) return 0;
 
+    cyw43_arch_lwip_begin();
     err_t err = tls_client_close_public(state);
+    cyw43_arch_lwip_end();
     tls_state_free();
 
     if (err == ERR_OK){
