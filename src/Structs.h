@@ -23,25 +23,46 @@
 //event groups
 #define EVT_NO_WATER        (1 << 0)
 #define EVT_WATER_PRESENT  (1 << 1)
+#define CONNECTING_NETWORK (1 << 2)
+#define NETWORK_CONNECTED (1 << 3)
+#define START_SCAN (1 << 4)
+#define SCAN_DONE (1 << 5)
 
+#define MAX_SCAN_RESULTS 20
+
+//network scan result structure
+struct Scan_result {
+    char ssid[32];
+    uint8_t bssid[6];
+    uint32_t auth_mode;
+};
 
 //simple examples for testing
 enum MessageType{
-    TEST_NUMBER,
-    TEST_STRING,
     TEMP_RH,
     TARGET_RH,
+    NETWORK_CREDENTIALS,
+};
+
+struct Network_credentials {
+    char ssid[32];
+    char pass[32];
 };
 
 //combine message type and data
 struct Message{
     MessageType type;
-
-    uint8_t number;
-    char string[64];
+    //uint8_t number;
+    //char string[64];
     double temp = 0.0;
     double rh = 0.0;
     uint8_t target_rh;
+    Network_credentials credentials;
+};
+
+struct Scan_result_msg {
+    Scan_result results[MAX_SCAN_RESULTS];
+    uint8_t result_count;
 };
 
 

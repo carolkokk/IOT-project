@@ -8,10 +8,9 @@
 
   <input id="sp">
   <button onclick="sendSP()">Set Humidity</button>
+  <p>Current Humidity Setpoint: <span id="sp-display">--</span></p>
+  <p id="alert-text" style="color: red; font-weight: bold;"></p>
   <canvas id="thChart" height="120"></canvas>
-
-</body>
-</html>
 
 
 <script>
@@ -22,6 +21,7 @@ async function sendSP(){
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ setpoint: v })
   });
+  document.getElementById('sp').value = "";
   alert('sent');
 }
 
@@ -59,4 +59,26 @@ async function updateChart() {
 
 updateChart();
 setInterval(updateChart, 5000);
+
+const evtSource = new EventSource("/events");
+
+async function updateSetpoint() {
+  const res = await fetch('/getsetpoint');
+  const data = await res.json();
+  if (data.setpoint !== null) {
+    document.getElementById("sp-display").innerText = data.setpoint;
+  }
+}
+
+updateSetpoint();
+setInterval(updateSetpoint, 5000);
+
+evtSource.onmessage = function (e) {
+  const data = JSON.parse(e.data);
+  const el = document.getElementById("alert-text");
+  el.innerText = data.alert === 1 ? data.text : "";
+};
 </script>
+
+</body>
+</html>

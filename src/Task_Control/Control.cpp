@@ -49,8 +49,8 @@ void Control::task_impl() {
     //test structure where Control sends a number to both UI and Network
     TickType_t lastWakeTime = xTaskGetTickCount();
     Message send_numbers{};
-    send_numbers.type = TEST_NUMBER;
-    send_numbers.number = 0;
+    //send_numbers.type = TEST_NUMBER;
+    //send_numbers.number = 0;
     Message received{};
 
     //testing temp sensor data communication to UI
@@ -63,6 +63,7 @@ void Control::task_impl() {
 
         bool dehum_water_alarm  = !dehum_water_sensor.Read();
         bool humidifier_water_alarm     = humidifier_water_sensor.Read();
+        EventBits_t bits = xEventGroupGetBits(event_group);
 
         // dehumidifier water alarm, triggers when water is detected
         if (dehum_water_alarm) {
@@ -83,13 +84,13 @@ void Control::task_impl() {
         }
 
         while (xQueueReceive(to_Control,&received,pdMS_TO_TICKS(10))) {
-            if (received.type == TEST_STRING){
+            /*if (received.type == TEST_STRING){
                 printf("received %s\n",received.string);
             }else if (received.type == TEST_NUMBER)
             {
                 printf("received %u\n",received.number);
-            }
-            else if (received.type == TARGET_RH) {
+            }*/
+            if (received.type == TARGET_RH) {
                 printf("New target rh: %d\n", static_cast<uint8_t>(received.target_rh));
                 set_rh = static_cast<uint8_t>(received.target_rh);
                 printf("set_rh in control task: %d\n", set_rh);
@@ -100,8 +101,10 @@ void Control::task_impl() {
         //printf("RH: %.2f %%\n", rh_sensor.read_rh());
         temp_rh.temp = std::round(rh_sensor.read_temp() * 100.0) / 100.0;
         temp_rh.rh = std::round(rh_sensor.read_rh() * 100.0) / 100.0;
-        xQueueSendToBack(to_UI, &temp_rh, portMAX_DELAY);
-        xQueueSendToBack(to_Network, &temp_rh, portMAX_DELAY);
+        xQueueSendToBack(to_UI, &temp_rh, pdMS_TO_TICKS(100));
+        if (bits & NETWORK_CONNECTED){
+            xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));
+        }
 
 
         if (!humidifier_water_alarm && !dehum_water_alarm){

@@ -6,24 +6,37 @@
 #include <cstring>
 #include <sstream>
 #include <iomanip>
-#include <math.h>
+#include <sys/stat.h>
 
 #include "PicoSPIBus.h"
 #include "PicoSPIDevice.h"
 
 extern LVGLPort *g_lvgl_port;
 
+// for now calibration values depend on the display
+#define DISPLAY28
+//#define DISPLAY24
+
 // calibration values for decting touch
+#ifdef DISPLAY28
 #define TOUCH_X_MIN 340
 #define TOUCH_X_MAX 3860
 #define TOUCH_Y_MIN 275
 #define TOUCH_Y_MAX 3890
+#endif
+
+#ifdef DISPLAY24
+#define TOUCH_X_MIN  285
+#define TOUCH_X_MAX  3951
+#define TOUCH_Y_MIN  414
+#define TOUCH_Y_MAX  3840
+#endif
 
 UI::UI(
-    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period,
-    uint32_t stack_size,
-    UBaseType_t priority) :
-    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),period(period){
+    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
+    EventGroupHandle_t event_group, TickType_t period, uint32_t stack_size, UBaseType_t priority) :
+    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),
+    event_group(event_group), period(period){
 
     init_UI();
 
@@ -37,18 +50,12 @@ void UI::task_wrap(void *pvParameters) {
 
 void UI::task_impl() {
     // black background
-    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x414445), 0);
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x4a5756), 0);
 
     //test structure where UI sends a message to both Network and control
     TickType_t lastWakeTime = xTaskGetTickCount();
     Message send{};
     Message received{};
-    send.type = TEST_STRING;
-    strncpy(send.string, "Test string from UI task.", sizeof(send.string)-1);
-    send.string[sizeof(send.string)-1] = '\0';
-
-    current_screen = MAIN;
-    next_screen = MAIN;
 
     sensor_data.temp = 0.0;
     sensor_data.rh = 0.0;
@@ -56,22 +63,37 @@ void UI::task_impl() {
     sensor_data.target_rh = 50;
     sensor_data.type = TEMP_RH;
 
-    load_main_screen(sensor_data, true);
+    current_screen = MAIN;
+    screen_depth = 0;
+    System_Status sys_status;
+    sys_status.initial_main = true;
+    load_main_screen(sensor_data, sys_status);
+    bool prev_network_connected = false;
 
     while(true) {
-        while (xQueueReceive(to_UI,&received,pdMS_TO_TICKS(10))) {
-            /*if (received.type == TEST_STRING){
-                printf("received %s\n",received.string);
+        EventBits_t bits = xEventGroupGetBits(event_group);
+
+        bool now_connected = bits & NETWORK_CONNECTED;
+        bool now_connecting = bits & CONNECTING_NETWORK;
+
+        sys_status.network_connected = now_connected;
+        sys_status.connecting_network = now_connecting;
+
+        if (now_connected != prev_network_connected) {
+            prev_network_connected = now_connected;
+            if (current_screen == MAIN) {
+                update_main_screen(sys_status);
             }
-            else if (received.type == TEST_NUMBER){
-                printf("received %u\n",received.number);
-            }*/
+        }
+
+        while (xQueueReceive(to_UI,&received,pdMS_TO_TICKS(10))) {
             if (received.type == TEMP_RH) {
                 sensor_data.type = TEMP_RH;
                 sensor_data.rh = received.rh;
                 sensor_data.temp = received.temp;
                 if (current_screen == MAIN) {
-                    load_main_screen(sensor_data, false);
+                    sys_status.initial_main = false;
+                    load_main_screen(sensor_data, sys_status);
                 }
                 printf("UI received TEMP: %.2f\n", received.temp);
                 printf("UI received RH: %.2f\n", received.rh);
@@ -81,6 +103,16 @@ void UI::task_impl() {
                 printf("UI RECEIVED set rh: %d", received.target_rh);
             }
         }
+
+        Scan_result_msg scan_msg{};
+        if (xQueueReceive(scan_results_queue, &scan_msg, 0) == pdTRUE) {
+            if (current_screen == AVAILABLE_NETWORKS) {
+                lv_obj_clean(lv_screen_active());
+                load_available_networks(scan_msg);
+                networks_loaded = true;
+            }
+        }
+
         lv_timer_handler();
 
         // check for flags
@@ -88,10 +120,10 @@ void UI::task_impl() {
             menu_selected = false;
             switch (menu_selection) {
                 case 0:
-                    next_screen = SET_RH;
+                    navigate_to(SET_RH);
                     break;
                 case 1:
-                    next_screen = SET_NETWORK;
+                    navigate_to(NETWORK);
                     break;
             }
         }
@@ -106,7 +138,8 @@ void UI::task_impl() {
             xQueueSendToBack(to_Control, &msg, portMAX_DELAY);
             xQueueSendToBack(to_Network, &msg, portMAX_DELAY);
 
-            next_screen = MAIN;
+            //next_screen = MAIN;
+            navigate_back();
         }
 
         if (current_screen != next_screen) {
@@ -114,17 +147,33 @@ void UI::task_impl() {
 
             // cleans up current screen and sets blck background again before displayinf new screen
             lv_obj_clean(lv_screen_active());
-            lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x414445), 0);
+            lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x4a5756), 0);
 
             switch (current_screen) {
                 case MAIN:
-                    load_main_screen(sensor_data, true);
+                    load_main_screen(sensor_data, sys_status);
                     break;
                 case SET_RH:
                     load_rh_set_screen(sensor_data.target_rh);
                     break;
                 case PRESET_SELECT:
                     load_preset_screen();
+                    break;
+                case NETWORK:
+                    networks_loaded = false;
+                    load_network_screen(sys_status.network_connected);
+                    break;
+                case AVAILABLE_NETWORKS: {
+                    xEventGroupSetBits(event_group, START_SCAN);
+                    networks_loaded = false;
+                    lv_obj_t *label = lv_label_create(lv_screen_active());
+                    lv_label_set_text(label, "Searching for networks...");
+                    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+                    lv_obj_center(label);
+                    break;
+                }
+                case ENTER_PASS:
+                    load_password_screen();
                     break;
             }
         }
@@ -155,7 +204,7 @@ void UI::init_UI() {
     // irq is enabled and rotation is set for touch
     touch = std::make_shared<XPT2046_Touch>(touch_device.get());
     //touch->begin();
-    touch->setRotation(3);
+    touch->setRotation(0);
 
     //touch integration for lvgl
     lvgl_touch = std::make_shared<LVGLTouch>(touch.get(), 320, 240);
@@ -165,28 +214,29 @@ void UI::init_UI() {
 }
 
 
-void UI::load_main_screen(Message received, bool initial) {
+void UI::load_main_screen(Message received, System_Status status) {
     //buffer for updating sensor data
     char buf[64];
 
-    if (initial) {
+    if (status.initial_main) {
         // a white rectangle for the background of displaying sensor info
         lv_obj_t *white_bck = lv_obj_create(lv_screen_active());
         lv_obj_set_size(white_bck, 170, 90);
-        lv_obj_set_pos(white_bck, 5, 10);
-        lv_obj_set_style_bg_color(white_bck, lv_color_white(), 0);
+        lv_obj_set_pos(white_bck, 15, 15);
+        lv_obj_set_style_bg_color(white_bck, lv_color_hex(0xbfa782), 0);
+        lv_obj_set_style_border_color(white_bck, lv_color_hex(0xb8945f), 0);
         lv_obj_set_style_arc_rounded(white_bck, 10, 0);
 
         // humidity label
         rh_label = lv_label_create(lv_screen_active());
-        lv_obj_set_pos(rh_label, 10, 20);
-        lv_obj_set_style_text_color(rh_label, lv_color_black(), 0);
+        lv_obj_set_pos(rh_label, 25, 25);
+        lv_obj_set_style_text_color(rh_label, lv_color_white(), 0);
         lv_obj_set_style_text_font(rh_label, &lv_font_montserrat_24, 0);
 
         // temperature label
         temp_label = lv_label_create(lv_screen_active());
-        lv_obj_set_pos(temp_label, 33, 60);
-        lv_obj_set_style_text_color(temp_label, lv_color_black(), 0);
+        lv_obj_set_pos(temp_label, 48, 65);
+        lv_obj_set_style_text_color(temp_label, lv_color_white(), 0);
         lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_24, 0);
 
         // dropdown menu test
@@ -196,35 +246,43 @@ void UI::load_main_screen(Message received, bool initial) {
 
         lv_obj_t* dd = lv_dropdown_create(lv_screen_active());
         lv_dropdown_set_options_static(dd, options);
-        lv_obj_align(dd, LV_ALIGN_BOTTOM_RIGHT, -20, -10);
-        lv_obj_set_style_bg_color(dd, lv_color_hex(0x8fa4b0), 0);
+        lv_obj_align(dd, LV_ALIGN_BOTTOM_RIGHT, -15, -10);
+        lv_obj_set_style_bg_color(dd, lv_color_hex(0x2162cc), 0);
         lv_dropdown_set_dir(dd, LV_DIR_BOTTOM);
         lv_dropdown_set_text(dd, "Menu");
         lv_dropdown_set_symbol(dd, LV_SYMBOL_SETTINGS);
+        lv_obj_set_style_text_color(dd, lv_color_hex(0x83cdf2), 0);
+        lv_obj_set_style_border_color(dd, lv_color_hex(0x2b64ad), 0);
+
+
         lv_label_set_text(rh_label, "RH:   --");
         lv_label_set_text(temp_label, "T:   --");
 
         //adding callback to react to different menu selection items
-       lv_obj_add_event_cb(dd, dd_menu_callback, LV_EVENT_VALUE_CHANGED, this);
+        lv_obj_add_event_cb(dd, dd_menu_callback, LV_EVENT_VALUE_CHANGED, this);
 
-        // creating led for indicating water tank
-        /*
-        led  = lv_led_create(lv_screen_active());
-        //lv_color_t blue = lv_color_make(64, 125, 237);
-        lv_led_set_color(led, lv_color_white());
-        lv_obj_align(led, LV_ALIGN_LEFT_MID, 20, 10);
-        lv_led_on(led);*/
-        tank_label = lv_label_create(lv_screen_active());
-        lv_obj_set_style_text_color(tank_label, lv_color_white(), 0);
-        lv_label_set_text(tank_label, "Water level OK");
-        lv_obj_set_pos(tank_label, 20, 120);
-        lv_obj_set_style_text_color(tank_label, lv_color_hex(0x217feb), 0);
+        network_icon = lv_label_create(lv_screen_active());
+        lv_label_set_text(network_icon, LV_SYMBOL_WIFI);
+        lv_obj_set_pos(network_icon, 40, 150);
 
-        network_label = lv_label_create(lv_screen_active());
-        lv_obj_set_style_text_color(network_label, lv_color_white(), 0);
-        lv_label_set_text(network_label, "Network CONN");
-        lv_obj_set_pos(network_label, 20, 140);
-        lv_obj_set_style_text_color(network_label, lv_color_hex(0x4ad43b), 0);
+        lv_obj_set_style_text_font(network_icon, &lv_font_montserrat_24, 0);
+        lv_color_t wifi_status_color = status.network_connected ? lv_color_hex(0x18cc57) : lv_color_hex(0x0040ff);
+        lv_obj_set_style_text_color(network_icon, wifi_status_color, 0);
+
+        tank_icon = lv_label_create(lv_screen_active());
+        lv_obj_set_style_text_color(tank_icon, lv_color_white(), 0);
+        lv_label_set_text(tank_icon, LV_SYMBOL_TINT);
+        lv_obj_set_pos(tank_icon, 45, 115);
+        lv_obj_set_style_text_font(tank_icon, &lv_font_montserrat_24, 0);
+        //lv_label_set_text(tank_label, "Water level OK");
+
+        lv_obj_set_style_text_color(tank_icon, lv_color_hex(0xe0ae67), 0);
+
+        /*network_status_label = lv_label_create(lv_screen_active());
+        lv_obj_set_style_text_color(network_status_label, lv_color_white(), 0);
+        lv_label_set_text(network_status_label, "Network CONN");
+        lv_obj_set_pos(network_status_label, 20, 140);
+        lv_obj_set_style_text_color(network_status_label, lv_color_hex(0x4ad43b), 0);*/
     } else {
         // update labels with new data
         snprintf(buf, sizeof(buf), "RH:   %.2f %%", received.rh);
@@ -234,6 +292,16 @@ void UI::load_main_screen(Message received, bool initial) {
         lv_label_set_text(temp_label, buf);
     }
 }
+
+void UI::update_main_screen(System_Status status) {
+    // update wifi icon color
+    lv_color_t wifi_status_color = status.network_connected ? lv_color_hex(0x18cc57) : lv_color_hex(0x0040ff);
+    lv_obj_set_style_text_color(network_icon, wifi_status_color, 0);
+
+    // update
+
+}
+
 
 void UI::dd_menu_callback(lv_event_t* e) {
     auto ui = (UI*)lv_event_get_user_data(e);
@@ -267,33 +335,11 @@ void UI::load_rh_set_screen(uint8_t target_rh) {
     lv_obj_align_to(slider_label, slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 
     // button to save the new set rh
-    lv_obj_t* save_btn = lv_button_create(lv_screen_active());
-    lv_obj_add_event_cb(save_btn, save_btn_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_align(save_btn, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(save_btn, lv_color_hex(0x8fa4b0), 0);
-
-    lv_obj_t* btn_label = lv_label_create(save_btn);
-    lv_label_set_text(btn_label, "SAVE");
-    lv_obj_center(btn_label);
-
+    create_button(save_btn_event_cb, LV_ALIGN_CENTER, 0, 0, "SAVE");
     // button to open pre-set page
-    lv_obj_t* preset_btn = lv_button_create(lv_screen_active());
-    lv_obj_add_event_cb(preset_btn, preset_btn_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_align(preset_btn, LV_ALIGN_CENTER, 0, 40);
-
-    lv_obj_t* preset_btn_label = lv_label_create(preset_btn);
-    lv_label_set_text(preset_btn_label, "CHOOSE PRESET");
-    lv_obj_center(preset_btn_label);
-
+    create_button(preset_btn_event_cb, LV_ALIGN_CENTER, 0, 0, "CHOOSE PRESET");
     // button to cancel
-    lv_obj_t* cancel_btn = lv_button_create(lv_screen_active());
-    lv_obj_add_event_cb(cancel_btn, cancel_slider_btn_callback, LV_EVENT_CLICKED, this);
-    lv_obj_align(cancel_btn , LV_ALIGN_BOTTOM_LEFT, 0, -10);
-    lv_obj_set_style_bg_color(cancel_btn , lv_color_hex(0x8fa4b0), 0);
-
-    lv_obj_t* cancel_btn_label = lv_label_create(cancel_btn);
-    lv_label_set_text(cancel_btn_label, " < ");
-    lv_obj_center(cancel_btn_label);
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
 
 void UI::slider_event_cb(lv_event_t* e) {
@@ -315,14 +361,8 @@ void UI::save_btn_event_cb(lv_event_t* e) {
 
 void UI::preset_btn_event_cb(lv_event_t *e) {
     auto ui = (UI*)lv_event_get_user_data(e);
-    ui->next_screen = PRESET_SELECT;
+    ui->navigate_to(PRESET_SELECT);
 }
-
-void UI::cancel_slider_btn_callback(lv_event_t *e) {
-    auto ui = (UI*)lv_event_get_user_data(e);
-    ui->next_screen = MAIN;
-}
-
 
 void UI::load_preset_screen() {
     lv_style_init(&style_radio);
@@ -350,23 +390,8 @@ void UI::load_preset_screen() {
         lv_obj_add_event_cb(obj, preset_selection_cb, LV_EVENT_CLICKED, this);
     }
 
-    lv_obj_t* save_preset_btn = lv_button_create(lv_screen_active());
-    lv_obj_add_event_cb(save_preset_btn, save_preset_btn_callback, LV_EVENT_CLICKED, this);
-    lv_obj_align(save_preset_btn, LV_ALIGN_BOTTOM_MID, 0, -20);
-    lv_obj_set_style_bg_color(save_preset_btn, lv_color_hex(0x8fa4b0), 0);
-
-    lv_obj_t* btn_label = lv_label_create(save_preset_btn);
-    lv_label_set_text(btn_label, "SAVE");
-    lv_obj_center(btn_label);
-
-    lv_obj_t* cancel_btn = lv_button_create(lv_screen_active());
-    lv_obj_add_event_cb(cancel_btn, cancel_preset_btn_callback, LV_EVENT_CLICKED, this);
-    lv_obj_align(cancel_btn , LV_ALIGN_BOTTOM_LEFT, 0, -10);
-    lv_obj_set_style_bg_color(cancel_btn , lv_color_hex(0x8fa4b0), 0);
-
-    lv_obj_t* cancel_btn_label = lv_label_create(cancel_btn);
-    lv_label_set_text(cancel_btn_label, " < ");
-    lv_obj_center(cancel_btn_label);
+    create_button(save_preset_btn_callback, LV_ALIGN_BOTTOM_MID, 0, -20, "SAVE");
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
 
 void UI::preset_selection_cb(lv_event_t *e) {
@@ -391,18 +416,122 @@ void UI::save_preset_btn_callback(lv_event_t *e) {
     ui->rh_val_saved = true;
 }
 
-void UI::cancel_preset_btn_callback(lv_event_t *e) {
-    auto ui = (UI*)lv_event_get_user_data(e);
-    ui->next_screen = SET_RH;
+void UI::load_network_screen(bool network_connected) {
+    network_status_label = lv_label_create(lv_screen_active());
+    const char *status = network_connected ? "Status: CONNECTED" : "Status: DISCONNECTED";
+    lv_label_set_text(network_status_label,  status);
+    lv_obj_set_style_text_color(network_status_label, lv_color_white(), 0);
+    lv_obj_align(network_status_label, LV_ALIGN_TOP_MID, 0, 30);
+    create_button(search_networks_btn_cb, LV_ALIGN_TOP_MID, 0, 120, "NEW CONNECTION");
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
 
-void UI::create_save_button(lv_event_cb_t* event_cb) {
-    lv_obj_t* save_btn = lv_button_create(lv_screen_active());
-    lv_obj_add_event_cb(save_btn, save_btn_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_align(save_btn, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(save_btn, lv_color_hex(0x8fa4b0), 0);
+void UI::search_networks_btn_cb(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    //xEventGroupSetBits(ui->event_group, START_SCAN);
+    ui->navigate_to(AVAILABLE_NETWORKS);
+}
 
-    lv_obj_t* btn_label = lv_label_create(save_btn);
-    lv_label_set_text(btn_label, "SAVE");
+void UI::load_available_networks(Scan_result_msg &msg) {
+    network_list = lv_list_create(lv_screen_active());
+    lv_obj_set_size(network_list, 250, 150);
+    lv_obj_align(network_list, LV_ALIGN_TOP_MID, 0, 10);
+
+    //add buttons to list
+    lv_obj_t *btn;
+    for (uint8_t i = 0; i < msg.result_count; ++i) {
+        btn = lv_list_add_button(network_list, nullptr, msg.results[i].ssid);
+        lv_obj_add_event_cb(btn, network_list_cb, LV_EVENT_CLICKED, this);
+    }
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, "< ");
+}
+
+void UI::network_list_cb(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    lv_obj_t * btn = lv_event_get_target_obj(e);
+    const char *txt = lv_list_get_button_text(ui->network_list, btn);
+
+    printf("Selected network: %s\n", txt);
+    strncpy(ui->credentials.ssid, txt, sizeof(ui->credentials.ssid) - 1);
+    ui->credentials.ssid[sizeof(ui->credentials.ssid) - 1] = '\0';
+
+    ui->navigate_to(ENTER_PASS);
+}
+
+void UI::load_password_screen() {
+    current_network_name_label = lv_label_create(lv_screen_active());
+    lv_obj_set_pos(current_network_name_label, 30, 20);
+    lv_label_set_text(current_network_name_label, credentials.ssid);
+    lv_obj_set_style_text_color(current_network_name_label, lv_color_white(), 0);
+
+    // text area
+    lv_obj_t *text_area = lv_textarea_create(lv_screen_active());
+    lv_obj_align(text_area, LV_ALIGN_TOP_MID, 10, 45);
+    lv_obj_set_size(text_area, 280, 20);
+    lv_textarea_set_placeholder_text(text_area, "Password");
+    lv_textarea_set_one_line(text_area, true);
+    lv_textarea_set_password_mode(text_area, true);
+
+    lv_obj_t *keyb = lv_keyboard_create(lv_screen_active());
+    lv_keyboard_set_textarea(keyb, text_area);
+
+    lv_obj_add_event_cb(keyb, keyboard_cb, LV_EVENT_ALL, this);
+
+    password_textarea = text_area;
+}
+
+void UI::keyboard_cb(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_READY) {
+        const char *pass = lv_textarea_get_text(ui->password_textarea);
+        strncpy(ui->credentials.pass, pass, sizeof(ui->credentials.pass) - 1);
+        ui->credentials.pass[sizeof(ui->credentials.pass) - 1] = '\0';
+
+        printf("Connecting. SSID: %s, PASS: %s\n", ui->credentials.ssid, ui->credentials.pass);
+
+        //sending credentials to network task to connect
+        Message msg{};
+        msg.type = NETWORK_CREDENTIALS;
+        msg.credentials = ui->credentials;
+        xQueueSendToBack(ui->to_Network, &msg, portMAX_DELAY);
+        xEventGroupSetBits(ui->event_group, CONNECTING_NETWORK);
+
+        ui->navigate_to(MAIN);
+    } else if (code == LV_EVENT_CANCEL) {
+        ui->navigate_back();
+    }
+}
+
+void UI::create_button(lv_event_cb_t event_cb, lv_align_t align, int32_t x_ofs, int32_t y_ofs, const char *text) {
+    lv_obj_t* btn = lv_button_create(lv_screen_active());
+    lv_obj_add_event_cb(btn, event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_align(btn, align, x_ofs, y_ofs);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x2162cc), 0);
+    lv_obj_set_style_text_color(btn, lv_color_hex(0x83cdf2), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x2b64ad), 0);
+    lv_obj_t* btn_label = lv_label_create(btn);
+    lv_label_set_text(btn_label, text);
     lv_obj_center(btn_label);
+}
+
+void UI::navigate_to(Screens screen) {
+    if (screen_depth < 5) {
+        screen_history[screen_depth++] = current_screen;
+    }
+    next_screen = screen;
+}
+
+void UI::navigate_back() {
+    if (screen_depth > 0) {
+        next_screen = screen_history[--screen_depth];
+    } else {
+        next_screen = MAIN;
+    }
+}
+
+void UI::back_btn_cb(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    ui->navigate_back();
 }

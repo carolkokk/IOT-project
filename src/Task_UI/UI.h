@@ -5,6 +5,8 @@
 #include "semphr.h"
 #include "task.h"
 #include <memory>
+
+#include "event_groups.h"
 #include "Structs.h"
 
 #include "LVGLTouch.h"
@@ -12,13 +14,21 @@
 #include "display/ili9341.h"
 #include "display/XPT2046_Touch.h"
 
-enum screens {
+enum Screens {
     MAIN,
     SET_RH,
     PRESET_SELECT,
-    SET_NETWORK,
-    SCAN_NETWORK,
+    NETWORK,
+    AVAILABLE_NETWORKS,
     ENTER_PASS,
+};
+
+struct System_Status {
+    bool initial_main = false;
+    bool connecting_network = false;
+    bool network_connected = false;
+    bool water_overflow = false;
+    bool refill_water = false;
 };
 
 struct Preset_Options {
@@ -28,7 +38,9 @@ struct Preset_Options {
 
 class UI {
 public:
-    UI(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,TickType_t period, uint32_t stack_size = 4096, UBaseType_t priority = tskIDLE_PRIORITY + 2);
+    UI(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
+        EventGroupHandle_t event_group,
+        TickType_t period, uint32_t stack_size = 4096, UBaseType_t priority = tskIDLE_PRIORITY + 2);
     static void task_wrap(void *pvParameters);
 
 private:
@@ -37,6 +49,8 @@ private:
     QueueHandle_t to_UI;
     QueueHandle_t to_Network;
     QueueHandle_t to_Control;
+    QueueHandle_t scan_results_queue;
+    EventGroupHandle_t event_group;
     TickType_t period;
 
     Message sensor_data;
@@ -52,8 +66,8 @@ private:
 
     void init_UI(void);
 
-    screens current_screen;
-    screens next_screen;
+    Screens current_screen;
+    Screens next_screen;
 
     // flags for events (maybe do event bits?)
     bool menu_selected;
@@ -65,16 +79,17 @@ private:
     //uint8_t target_rh = 50;
 
     // functions for loading different UI screens
-    void load_main_screen(Message received, bool initial);
+    void load_main_screen(Message received, System_Status status);
+    void update_main_screen(System_Status status);
     static void dd_menu_callback(lv_event_t* e);
 
+    // functions for setting rh screens
     void load_rh_set_screen(uint8_t target_rh);
     static void slider_event_cb(lv_event_t * e);
     static void save_btn_event_cb(lv_event_t * e);
     static void preset_btn_event_cb(lv_event_t * e);
-    static void cancel_slider_btn_callback(lv_event_t *e);
-    static void cancel_preset_btn_callback(lv_event_t *e);
-
+    //static void cancel_slider_btn_callback(lv_event_t *e);
+    //static void cancel_preset_btn_callback(lv_event_t *e);
     static constexpr Preset_Options PRESET_OPTIONS[] = {
         {"Acoustic gitar", 45},
         {"Electric guitar", 40},
@@ -85,20 +100,47 @@ private:
     static void preset_selection_cb(lv_event_t * e);
     static void save_preset_btn_callback(lv_event_t * e);
 
-    void create_save_button(lv_event_cb_t* event_cb);
+    // functions for network setting screens
+    void load_network_screen(bool network_connected);
+    static void search_networks_btn_cb(lv_event_t * e);
+    void load_available_networks(Scan_result_msg &msg);
+    static void network_list_cb(lv_event_t *e);
+    // getting network scan results and loading to an array
+    Scan_result scan_results[MAX_SCAN_RESULTS];
+    uint8_t result_count = 0;
+    // credential message
+    Network_credentials credentials;
+    void load_password_screen();
+    static void keyboard_cb(lv_event_t *e);
+
+    //generic functions for creating buttons, going back
+    void create_button(lv_event_cb_t event_cb, lv_align_t align, int32_t x_ofs, int32_t y_ofs, const char *text);
+    void navigate_to(Screens screen);
+    void navigate_back();
+    static void back_btn_cb(lv_event_t * e);
+
+    Screens screen_history[5];
+    int screen_depth = 0;
+
+    bool networks_loaded = false;
 
     // lvgl UI elements
     lv_obj_t *temp_label;
     lv_obj_t *rh_label;
     lv_obj_t *dropdown;
-    lv_obj_t *tank_label;
-    lv_obj_t *network_label;
+    lv_obj_t *tank_icon;
+    lv_obj_t *network_icon;
+    lv_obj_t *tank_status_label;
 
     lv_style_t style_radio;
     lv_style_t style_radio_chk;
 
-    // static to be used from multiple places
     lv_obj_t * slider_label;
+
+    lv_obj_t *network_list;
+    lv_obj_t *network_status_label;
+    lv_obj_t *current_network_name_label;
+    lv_obj_t *password_textarea;
 };
 
 #endif //UI_H

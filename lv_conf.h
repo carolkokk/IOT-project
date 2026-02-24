@@ -71,6 +71,9 @@
 /*Default Dot Per Inch. Used to initialize default sizes such as widgets sized, style paddings.
  *(Not so important, you can adjust it to modify default sizes and spaces)*/
 #define LV_DPI_DEF 130     /*[px/inch]*/
+#define LV_INDEV_DEF_SCROLL_LIMIT        10
+#define LV_INDEV_DEF_SCROLL_THROW        10
+#define LV_INDEV_DEF_LONG_PRESS_TIME     400
 
 /*=================
  * OPERATING SYSTEM
