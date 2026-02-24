@@ -58,8 +58,17 @@ bool TlsClient::tls_connect(const char* hostname, const uint8_t *cert, size_t ce
         return false;
     } else
     {
+        int waiting = 0;
         while (!tls_client_is_connected(state) && !tls_client_is_complete(state)) {
             vTaskDelay(pdMS_TO_TICKS(10));
+            waiting += pdMS_TO_TICKS(10);
+            if (waiting >= timeout*1000){
+                printf("timeout waiting for tls connection\n");
+                cyw43_arch_lwip_begin();
+                tls_close();
+                cyw43_arch_lwip_end();
+                return false;
+            }
         }
 
         if (!tls_client_is_connected(state)) {

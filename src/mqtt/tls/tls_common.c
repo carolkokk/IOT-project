@@ -58,6 +58,7 @@ static err_t tls_client_connected(void *arg, struct altcp_pcb *pcb, err_t err) {
         printf("connect failed %d\n", err);
         state->connected = false;
         state->error = err;
+        state->complete = true;
         return tls_client_close(state);
     }
 
@@ -85,6 +86,7 @@ static void tls_client_err(void *arg, err_t err) {
     printf("tls_client_err %d\n", err);
     tls_client_close(state);
     state->error = PICO_ERROR_GENERIC;
+    state->complete = true;
 }
 
 static err_t tls_client_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
@@ -150,6 +152,11 @@ static void tls_client_connect_to_server_ip(const ip_addr_t *ipaddr, TLS_CLIENT_
 
 static void tls_client_dns_found(const char* hostname, const ip_addr_t *ipaddr, void *arg)
 {
+    TLS_CLIENT_T *state = (TLS_CLIENT_T *)arg;
+    if (state->complete) {
+        printf("DNS response too late, ignoring\n");
+        return;
+    }
     if (ipaddr)
     {
         printf("DNS resolving complete\n");

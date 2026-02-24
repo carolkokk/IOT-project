@@ -74,7 +74,7 @@ void Network::task_impl() {
             Network_credentials creds{};
             //first clear possible remaining connections and clear network connected bit
             xEventGroupClearBits(event_group, NETWORK_CONNECTED);
-            disconnect_internet(ipstack,mqtt);
+            //disconnect_internet(ipstack,mqtt);
             vTaskDelay(pdMS_TO_TICKS(100));
 
             while (xQueueReceive(credentials_to_network,&creds,pdMS_TO_TICKS(100))){
@@ -136,6 +136,7 @@ void Network::task_impl() {
 
 bool Network::connect_internet(const char* ssid, const char* pwd, IPStack& ipstack,MQTTService& mqtt){
     //disconnect possible remaining connections
+    ipstack.disconnect();
     disconnect_internet(ipstack,mqtt);
     wifi_connected = false;
     mqtt_connected = false;
@@ -176,10 +177,10 @@ void Network::check_and_reconnect(IPStack& ipstack, MQTTService& mqtt, const cha
         if (!ipstack.WiFi_connected() || !mqtt.isConnected()) {
             xEventGroupClearBits(event_group, NETWORK_CONNECTED);
             xEventGroupSetBits(event_group, CONNECTING_NETWORK);
-            vTaskDelay(pdMS_TO_TICKS(200));
+            //vTaskDelay(pdMS_TO_TICKS(200));
             printf("Not connected... reconnecting\n");
-            disconnect_internet(ipstack, mqtt);
-            vTaskDelay(pdMS_TO_TICKS(100));
+            //disconnect_internet(ipstack, mqtt);
+            //vTaskDelay(pdMS_TO_TICKS(100));
 
             if (connect_internet(ssid, pwd, ipstack, mqtt)) {
                 printf("reconnection successful\n");
