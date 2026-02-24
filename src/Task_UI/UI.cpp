@@ -33,9 +33,9 @@ extern LVGLPort *g_lvgl_port;
 #endif
 
 UI::UI(
-    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
+    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue, QueueHandle_t credentials_to_network,
     EventGroupHandle_t event_group, TickType_t period, uint32_t stack_size, UBaseType_t priority) :
-    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),
+    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),credentials_to_network(credentials_to_network),
     event_group(event_group), period(period){
 
     init_UI();
@@ -65,7 +65,7 @@ void UI::task_impl() {
 
     current_screen = MAIN;
     screen_depth = 0;
-    System_Status sys_status;
+    //System_Status sys_status;
     sys_status.initial_main = true;
     load_main_screen(sensor_data, sys_status);
     bool prev_network_connected = false;
@@ -494,11 +494,11 @@ void UI::keyboard_cb(lv_event_t *e) {
         printf("Connecting. SSID: %s, PASS: %s\n", ui->credentials.ssid, ui->credentials.pass);
 
         //sending credentials to network task to connect
-        Message msg{};
-        msg.type = NETWORK_CREDENTIALS;
-        msg.credentials = ui->credentials;
-        xQueueSendToBack(ui->to_Network, &msg, portMAX_DELAY);
+        Network_credentials net_credentials{};
+        net_credentials = ui->credentials;
         xEventGroupSetBits(ui->event_group, CONNECTING_NETWORK);
+        xQueueSendToBack(ui->credentials_to_network, &net_credentials, pdMS_TO_TICKS(portMAX_DELAY));
+        ui->sys_status.initial_main = true;
 
         ui->navigate_to(MAIN);
     } else if (code == LV_EVENT_CANCEL) {
