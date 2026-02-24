@@ -38,17 +38,19 @@ struct Preset_Options {
 
 class UI {
 public:
-    UI(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
+    UI(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue, QueueHandle_t credentials_to_network,
         EventGroupHandle_t event_group,
         TickType_t period, uint32_t stack_size = 4096, UBaseType_t priority = tskIDLE_PRIORITY + 2);
     static void task_wrap(void *pvParameters);
 
 private:
+    System_Status sys_status;
     void task_impl();
     const char *name = "UI";
     QueueHandle_t to_UI;
     QueueHandle_t to_Network;
     QueueHandle_t to_Control;
+    QueueHandle_t credentials_to_network;
     QueueHandle_t scan_results_queue;
     EventGroupHandle_t event_group;
     TickType_t period;

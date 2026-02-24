@@ -57,7 +57,6 @@ struct Message{
     double temp = 0.0;
     double rh = 0.0;
     uint8_t target_rh;
-    Network_credentials credentials;
 };
 
 struct Scan_result_msg {
