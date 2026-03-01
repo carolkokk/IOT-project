@@ -33,9 +33,9 @@ extern LVGLPort *g_lvgl_port;
 #endif
 
 UI::UI(
-    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
+    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue, QueueHandle_t credentials_to_network,
     EventGroupHandle_t event_group, TickType_t period, uint32_t stack_size, UBaseType_t priority) :
-    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),
+    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),credentials_to_network(credentials_to_network),
     event_group(event_group), period(period){
 
     init_UI();
@@ -65,7 +65,7 @@ void UI::task_impl() {
 
     current_screen = MAIN;
     screen_depth = 0;
-
+    //System_Status sys_status;
     sys_status.initial_main = true;
     load_main_screen(sensor_data, sys_status);
     bool prev_network_connected = false;
@@ -136,7 +136,9 @@ void UI::task_impl() {
             msg.type = TARGET_RH;
             msg.target_rh = sensor_data.target_rh;
             xQueueSendToBack(to_Control, &msg, portMAX_DELAY);
-            xQueueSendToBack(to_Network, &msg, portMAX_DELAY);
+            if (bits & NETWORK_CONNECTED){
+                xQueueSendToBack(to_Network, &msg, portMAX_DELAY);
+            }
 
             //next_screen = MAIN;
             navigate_back();
@@ -302,6 +304,7 @@ void UI::update_main_screen(System_Status status) {
 
 }
 
+
 void UI::dd_menu_callback(lv_event_t* e) {
     auto ui = (UI*)lv_event_get_user_data(e);
 
@@ -328,6 +331,7 @@ void UI::load_rh_set_screen(uint8_t target_rh) {
     //showing the current set rh as slider initial value
     char buf[8];
     lv_snprintf(buf, sizeof(buf), "%d%%", target_rh);
+
     lv_label_set_text(slider_label, buf);
 
     lv_obj_align_to(slider_label, slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
@@ -471,7 +475,6 @@ void UI::load_password_screen() {
     lv_textarea_set_password_mode(text_area, true);
 
     lv_obj_t *keyb = lv_keyboard_create(lv_screen_active());
-    lv_obj_align(keyb, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_keyboard_set_textarea(keyb, text_area);
 
     lv_obj_add_event_cb(keyb, keyboard_cb, LV_EVENT_ALL, this);
@@ -491,13 +494,11 @@ void UI::keyboard_cb(lv_event_t *e) {
         printf("Connecting. SSID: %s, PASS: %s\n", ui->credentials.ssid, ui->credentials.pass);
 
         //sending credentials to network task to connect
-        Message msg{};
-        msg.type = NETWORK_CREDENTIALS;
-        msg.credentials = ui->credentials;
-        xQueueSendToBack(ui->to_Network, &msg, portMAX_DELAY);
+        Network_credentials net_credentials{};
+        net_credentials = ui->credentials;
         xEventGroupSetBits(ui->event_group, CONNECTING_NETWORK);
+        xQueueSendToBack(ui->credentials_to_network, &net_credentials, pdMS_TO_TICKS(portMAX_DELAY));
         ui->sys_status.initial_main = true;
-
         ui->navigate_to(MAIN);
     } else if (code == LV_EVENT_CANCEL) {
         ui->navigate_back();
