@@ -27,6 +27,7 @@
 #define NETWORK_CONNECTED (1 << 3)
 #define START_SCAN (1 << 4)
 #define SCAN_DONE (1 << 5)
+#define BAD_AUTH (1 << 6)
 
 #define MAX_SCAN_RESULTS 20
 
@@ -57,7 +58,6 @@ struct Message{
     double temp = 0.0;
     double rh = 0.0;
     uint8_t target_rh;
-    Network_credentials credentials;
 };
 
 struct Scan_result_msg {

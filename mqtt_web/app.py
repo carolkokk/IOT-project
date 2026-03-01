@@ -1,14 +1,18 @@
 import json
 import paho.mqtt.client as mqtt
 import time
-from flask import Flask, send_from_directory,jsonify, request, Response
+from flask import Flask, send_from_directory,jsonify, request, Response, session, redirect, url_for
 from dotenv import load_dotenv
+from datetime import timedelta
 import os
 import queue
 
 load_dotenv()
 app = Flask(__name__)
 DATA_FILE = "data.json"
+
+app.secret_key = "your_secret_key_here"
+app.permanent_session_lifetime = timedelta(minutes=10)
 
 BROKER = "mqtt3.thingspeak.com"
 PORT = 8883
@@ -21,19 +25,11 @@ PUB_TOPIC = f"channels/{CHANNEL_ID}/publish"
 
 alert_queues: list[queue.Queue] = []
 
-@app.get("/")
-def home():
-    return send_from_directory(".", "index.html")
 
 @app.get("/add")
 def add_page():
     return send_from_directory(".", "message.html")
 
-@app.get("/messages")
-def get_messages():
-    with open(DATA_FILE, "r", encoding="utf-8") as file:
-        data = json.load(file)
-    return jsonify(data)
 
 @app.get("/events")
 def events():
@@ -100,10 +96,10 @@ def on_message(client, userdata, msg):
             print(f"Setpoint updated: {current_setpoint}")
 
         #field 4 alarm handling
-        field4 = data_json.get("field4")
-        if field4 is not None and str(field4).strip() != "":
+        alarm = data_json.get("field4")
+        if alarm is not None and str(alarm).strip() != "":
             try:
-                alert_val = int(float(field4))
+                alert_val = int(float(alarm))
                 print(f"Alert field4={alert_val}")
                 broadcast_alert(alert_val)
             except ValueError:
@@ -120,7 +116,8 @@ def on_message(client, userdata, msg):
             data.append({
                 "t": int(time.time()*1000),
                 "temp": temp,
-                "hum": hum
+                "hum": hum,
+                "alarm": alarm
             })
 
             data = data[-30:]
@@ -157,5 +154,48 @@ mqtt_client.connect(BROKER, PORT, 60)
 mqtt_client.loop_start()
 
 
+
+VALID_USERNAME = os.getenv("VALID_USERNAME")
+VALID_PASSWORD = os.getenv("VALID_PASSWORD")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        if username == VALID_USERNAME and password == VALID_PASSWORD:
+            session.permanent = True
+            session["user"] = username
+            return redirect(url_for("home"))
+        else:
+            return "Invalid credentials", 401
+
+    return send_from_directory(".", "login.html")
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+@app.get("/")
+def home():
+    if "user" not in session:
+        return redirect(url_for("login"))
+    return send_from_directory(".", "index.html")
+
+@app.get("/messages")
+def get_messages():
+    if "user" not in session:
+        return ("Unauthorized", 401)
+
+    if not os.path.exists(DATA_FILE):
+        return jsonify([])
+
+    with open(DATA_FILE, "r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    return jsonify(data)
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=3000, debug=False)
+

@@ -21,7 +21,7 @@
 
 class Network {
 public:
-    Network(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
+    Network(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue, QueueHandle_t credentials_to_network,
             EventGroupHandle_t event_group,TickType_t period,
             uint32_t stack_size = 2048, UBaseType_t priority = tskIDLE_PRIORITY + 1);
     static void task_wrap(void *pvParameters);
@@ -46,6 +46,7 @@ private:
     QueueHandle_t to_Network;
     QueueHandle_t to_Control;
     QueueHandle_t scan_results_queue;
+    QueueHandle_t credentials_to_network;
     TickType_t period;
     bool wifi_connected = false;
     bool mqtt_connected = false;

@@ -2,11 +2,11 @@
 #include "Fmutex.h"
 
 Network::Network(
-    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue,
+    QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue, QueueHandle_t credentials_to_network,
     EventGroupHandle_t event_group,TickType_t period,
     uint32_t stack_size,
     UBaseType_t priority) :
-    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),
+    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),credentials_to_network(credentials_to_network),
     event_group(event_group),period(period){
     xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr);
 }
@@ -36,7 +36,7 @@ void Network::task_impl() {
     const uint8_t cert_mqtt[] = TLS_MQTT_BROKER;
     std::string payload;
     TlsClient tls_client;
-    IPStack ipstack(tls_client,cert_thingspeak,TLS_CLIENT_TIMEOUT_SECS);
+    IPStack ipstack(tls_client,cert_thingspeak,TLS_CLIENT_TIMEOUT_SECS,event_group);
     MQTTService mqtt(ipstack,HOSTNAME,PORT,MQTT_CLIENT_ID,sub_topic,pub_topic);
 
 
@@ -71,23 +71,25 @@ void Network::task_impl() {
 
         //check if UI wants to connect to the internet with pwd.
         if (bits & CONNECTING_NETWORK){
+            Network_credentials creds{};
             //first clear possible remaining connections and clear network connected bit
-            disconnect_internet(ipstack,mqtt);
-            vTaskDelay(pdMS_TO_TICKS(100));
             xEventGroupClearBits(event_group, NETWORK_CONNECTED);
+            //disconnect_internet(ipstack,mqtt);
+            vTaskDelay(pdMS_TO_TICKS(100));
 
-            while (xQueueReceive(to_Network,&received,pdMS_TO_TICKS(100)) && received.type == NETWORK_CREDENTIALS){
-                //copy ssid and pwd from ui
-                strncpy(ssid, received.credentials.ssid, sizeof(ssid) - 1);
-                ssid[sizeof(ssid) - 1] = '\0';
-                strncpy(pwd, received.credentials.pass, sizeof(pwd) - 1);
-                pwd[sizeof(pwd) - 1] = '\0';
-                printf("received ssid:%s password:%s\n",ssid,pwd);
+            while (xQueueReceive(credentials_to_network,&creds,pdMS_TO_TICKS(100))){
+                    printf("Received network credentials.\n");
+                    //copy ssid and pwd from ui
+                    strncpy(ssid, creds.ssid, sizeof(ssid) - 1);
+                    ssid[sizeof(ssid) - 1] = '\0';
+                    strncpy(pwd, creds.pass, sizeof(pwd) - 1);
+                    pwd[sizeof(pwd) - 1] = '\0';
+                    printf("received ssid:%s password:%s\n",ssid,pwd);
 
-                if (connect_internet(ssid,pwd,ipstack,mqtt)){
-                    xEventGroupSetBits(event_group, NETWORK_CONNECTED);
-                    next_check = xTaskGetTickCount() + period;
-                }
+                    if (connect_internet(ssid,pwd,ipstack,mqtt)){
+                        xEventGroupSetBits(event_group, NETWORK_CONNECTED);
+                        next_check = xTaskGetTickCount() + period;
+                    }
             }
             xEventGroupClearBits(event_group, CONNECTING_NETWORK);
         }
@@ -134,6 +136,7 @@ void Network::task_impl() {
 
 bool Network::connect_internet(const char* ssid, const char* pwd, IPStack& ipstack,MQTTService& mqtt){
     //disconnect possible remaining connections
+    ipstack.disconnect();
     disconnect_internet(ipstack,mqtt);
     wifi_connected = false;
     mqtt_connected = false;
@@ -174,10 +177,10 @@ void Network::check_and_reconnect(IPStack& ipstack, MQTTService& mqtt, const cha
         if (!ipstack.WiFi_connected() || !mqtt.isConnected()) {
             xEventGroupClearBits(event_group, NETWORK_CONNECTED);
             xEventGroupSetBits(event_group, CONNECTING_NETWORK);
-            vTaskDelay(pdMS_TO_TICKS(200));
+            //vTaskDelay(pdMS_TO_TICKS(200));
             printf("Not connected... reconnecting\n");
-            disconnect_internet(ipstack, mqtt);
-            vTaskDelay(pdMS_TO_TICKS(100));
+            //disconnect_internet(ipstack, mqtt);
+            //vTaskDelay(pdMS_TO_TICKS(100));
 
             if (connect_internet(ssid, pwd, ipstack, mqtt)) {
                 printf("reconnection successful\n");
