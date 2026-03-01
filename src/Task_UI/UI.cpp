@@ -14,22 +14,22 @@
 extern LVGLPort *g_lvgl_port;
 
 // for now calibration values depend on the display
-#define DISPLAY28
+#define DISPLAY2
 //#define DISPLAY24
 
 // calibration values for decting touch
-#ifdef DISPLAY28
+#ifdef DISPLAY1
 #define TOUCH_X_MIN 340
 #define TOUCH_X_MAX 3860
 #define TOUCH_Y_MIN 275
 #define TOUCH_Y_MAX 3890
 #endif
 
-#ifdef DISPLAY24
-#define TOUCH_X_MIN  285
-#define TOUCH_X_MAX  3951
-#define TOUCH_Y_MIN  414
-#define TOUCH_Y_MAX  3840
+#ifdef DISPLAY2
+#define TOUCH_X_MIN  272
+#define TOUCH_X_MAX  3839
+#define TOUCH_Y_MIN  190
+#define TOUCH_Y_MAX  3839
 #endif
 
 UI::UI(
@@ -65,7 +65,7 @@ void UI::task_impl() {
 
     current_screen = MAIN;
     screen_depth = 0;
-    System_Status sys_status;
+
     sys_status.initial_main = true;
     load_main_screen(sensor_data, sys_status);
     bool prev_network_connected = false;
@@ -204,7 +204,7 @@ void UI::init_UI() {
     // irq is enabled and rotation is set for touch
     touch = std::make_shared<XPT2046_Touch>(touch_device.get());
     //touch->begin();
-    touch->setRotation(0);
+    touch->setRotation(3);
 
     //touch integration for lvgl
     lvgl_touch = std::make_shared<LVGLTouch>(touch.get(), 320, 240);
@@ -302,7 +302,6 @@ void UI::update_main_screen(System_Status status) {
 
 }
 
-
 void UI::dd_menu_callback(lv_event_t* e) {
     auto ui = (UI*)lv_event_get_user_data(e);
 
@@ -329,7 +328,6 @@ void UI::load_rh_set_screen(uint8_t target_rh) {
     //showing the current set rh as slider initial value
     char buf[8];
     lv_snprintf(buf, sizeof(buf), "%d%%", target_rh);
-
     lv_label_set_text(slider_label, buf);
 
     lv_obj_align_to(slider_label, slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
@@ -473,6 +471,7 @@ void UI::load_password_screen() {
     lv_textarea_set_password_mode(text_area, true);
 
     lv_obj_t *keyb = lv_keyboard_create(lv_screen_active());
+    lv_obj_align(keyb, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_keyboard_set_textarea(keyb, text_area);
 
     lv_obj_add_event_cb(keyb, keyboard_cb, LV_EVENT_ALL, this);
@@ -497,6 +496,7 @@ void UI::keyboard_cb(lv_event_t *e) {
         msg.credentials = ui->credentials;
         xQueueSendToBack(ui->to_Network, &msg, portMAX_DELAY);
         xEventGroupSetBits(ui->event_group, CONNECTING_NETWORK);
+        ui->sys_status.initial_main = true;
 
         ui->navigate_to(MAIN);
     } else if (code == LV_EVENT_CANCEL) {

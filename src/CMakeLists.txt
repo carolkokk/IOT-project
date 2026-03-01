@@ -26,6 +26,8 @@ add_executable(${ProjectName}
 
         i2c/PicoI2C.cpp
         i2c/PicoI2C.h
+        EEPROM/EEPROM.h
+        EEPROM/EEPROM.cpp
 
         uart/PicoOsUart.cpp
         uart/PicoOsUart.h
@@ -36,10 +38,14 @@ add_executable(${ProjectName}
         spi/PicoSPIDevice.h
 
         display/spi_device.h
-        display/ili9341.h
         display/ili9341.cpp
+        display/ili9341.h
+        display/lvgl_port.cpp
         display/lvgl_port.h
-        display/lvgl_port.h
+        display/XPT2046_Touch.cpp
+        display/XPT2046_Touch.h
+        display/LVGLTouch.cpp
+        display/LVGLTouch.h
 
         Task_Control/Control.cpp
         Task_Control/Control.h
@@ -60,14 +66,6 @@ add_executable(${ProjectName}
         Temp_Rh/BME680_wrapper.cpp
         Temp_Rh/BME680_wrapper.h
         Temp_Rh/BME68x_SensorAPI/bme68x.c
-        display/ili9341.cpp
-        display/ili9341.h
-        display/lvgl_port.cpp
-        display/lvgl_port.h
-        display/XPT2046_Touch.cpp
-        display/XPT2046_Touch.h
-        display/LVGLTouch.cpp
-        display/LVGLTouch.h
 
         Fan/Fan.cpp
         Fan/Fan.h

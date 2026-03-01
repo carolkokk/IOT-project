@@ -5,6 +5,7 @@
 #include "semphr.h"
 #include "task.h"
 #include "PicoI2C.h"
+#include "EEPROM/EEPROM.h"
 #include <memory>
 
 #include "event_groups.h"
