@@ -27,6 +27,7 @@
 #define NETWORK_CONNECTED (1 << 3)
 #define START_SCAN (1 << 4)
 #define SCAN_DONE (1 << 5)
+#define BAD_AUTH (1 << 6)
 
 #define MAX_SCAN_RESULTS 20
 

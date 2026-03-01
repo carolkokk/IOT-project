@@ -15,8 +15,8 @@
 #define DUMP_BYTES(A, B) {}
 
 
-IPStack::IPStack(TlsClient& tls, const uint8_t *cert, int timeout)
-    : tls_client(tls),cert(cert),timeout(timeout),wifi_connected{false}{
+IPStack::IPStack(TlsClient& tls, const uint8_t *cert, int timeout, EventGroupHandle_t event_group)
+    : tls_client(tls),cert(cert),timeout(timeout),wifi_connected{false},event_group(event_group){
     init();
 }
 
@@ -41,7 +41,14 @@ bool IPStack::connect_WiFi(const char* ssid, const char* password, int max_retri
     }
     DEBUG_printf("Connecting to Wi-Fi...\n");
     for (int retry = 0; retry < max_retries; retry++){
-        if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
+        int ret = cyw43_arch_wifi_connect_timeout_ms(ssid, password, CYW43_AUTH_WPA2_AES_PSK, 10000);
+        //forward to UI task if password for connecting wifi is wrong.
+        if (ret == PICO_ERROR_BADAUTH){
+            xEventGroupSetBits(event_group,BAD_AUTH);
+            printf("wrong password. \n");
+            return false;
+        }
+        if (ret) {
             //try to connect to wifi
             DEBUG_printf("Failed to connect WIFI.\n");
             vTaskDelay(pdMS_TO_TICKS(2000));

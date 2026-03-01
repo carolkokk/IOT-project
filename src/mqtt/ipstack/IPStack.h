@@ -7,6 +7,9 @@
 
 #include <cstdint>
 #include <memory>
+
+#include "FreeRTOS.h"
+#include "event_groups.h"
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 
@@ -17,7 +20,7 @@
 
 class IPStack {
 public:
-    IPStack(TlsClient& tls, const uint8_t *cert, int timeout);
+    IPStack(TlsClient& tls, const uint8_t *cert, int timeout,EventGroupHandle_t event_group);
     bool init();
     bool connect_WiFi(const char* ssid, const char* password, int max_retries);
     bool WiFi_connected();
@@ -42,6 +45,7 @@ private:
     TlsClient& tls_client;
     const uint8_t *cert;
     int timeout;
+    EventGroupHandle_t event_group;
     //const void *send_request;
     /*struct tcp_pcb *tcp_pcb;
     ip_addr_t remote_addr;

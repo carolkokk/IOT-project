@@ -36,7 +36,7 @@ void Network::task_impl() {
     const uint8_t cert_mqtt[] = TLS_MQTT_BROKER;
     std::string payload;
     TlsClient tls_client;
-    IPStack ipstack(tls_client,cert_thingspeak,TLS_CLIENT_TIMEOUT_SECS);
+    IPStack ipstack(tls_client,cert_thingspeak,TLS_CLIENT_TIMEOUT_SECS,event_group);
     MQTTService mqtt(ipstack,HOSTNAME,PORT,MQTT_CLIENT_ID,sub_topic,pub_topic);
 
 
