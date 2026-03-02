@@ -224,3 +224,64 @@ void EEPROM::deleteLogs() {
     writeLogAddress(MIN_LOG_ADDR);
     printf("All logs deleted\n");
 }
+
+bool EEPROM::writeSample(float rh, float temp) {
+    // check index
+    uint16_t curr_idx = 0;
+    eepromRead(SAMPLE_IDX_ADDR, (uint8_t *)&curr_idx, sizeof(curr_idx));
+    if (curr_idx >= SAMPLE_COUNT) {
+        curr_idx = 0;
+    }
+
+    uint8_t buf[SAMPLE_SIZE];
+    memcpy(buf, &rh, 4);
+    memcpy(buf + 4, &temp, 4);
+    uint16_t crc = crc16(buf, 8);
+    buf[8] = static_cast<uint8_t>(crc >> 8);
+    buf[9] = static_cast<uint8_t>(crc & 0xFF);
+
+    uint16_t addr = SAMPLE_DATA_ADDR + curr_idx * SAMPLE_SIZE;
+    if (!eepromWrite(addr, buf, SAMPLE_SIZE)) return false;
+
+    curr_idx = (curr_idx + 1) % SAMPLE_COUNT;
+    return eepromWrite(SAMPLE_IDX_ADDR, (uint8_t *)&curr_idx, sizeof(curr_idx));
+}
+
+bool EEPROM::readAllSamples(Measure_history *samples, uint8_t &count) {
+    uint16_t write_idx = 0;
+    eepromRead(SAMPLE_IDX_ADDR, (uint8_t *)&write_idx, sizeof(write_idx));
+    if (write_idx >= SAMPLE_COUNT) {
+        write_idx = 0;
+    }
+
+    count = 0;
+    uint8_t buf[SAMPLE_SIZE];
+    // reading oldest to newest samples
+    for (uint8_t i = 0; i < SAMPLE_COUNT; ++i) {
+        uint16_t slot = (write_idx + i) % SAMPLE_COUNT;
+        uint16_t addr = SAMPLE_DATA_ADDR + slot * SAMPLE_SIZE;
+
+        if (eepromRead(addr, buf, SAMPLE_SIZE)) {
+            uint16_t stored_crc = (static_cast<uint16_t>(buf[8]) << 8) | buf[9];
+            uint16_t crc = crc16(buf, 8);
+
+            if (crc == stored_crc) {
+                memcpy(&samples[count].rh, buf, 4);
+                memcpy(&samples[count].temp, buf + 4, 4);
+                ++count;
+            }
+        }
+    }
+    return count > 0;
+}
+
+void EEPROM::deleteSamples() {
+    uint8_t zero = 0;
+    for (uint8_t i = 0; i < SAMPLE_COUNT; ++i) {
+        uint16_t addr = SAMPLE_DATA_ADDR + i * SAMPLE_SIZE;
+        eepromWrite(addr, &zero, 1);
+    }
+    uint16_t write_idx = 0;
+    eepromWrite(SAMPLE_IDX_ADDR, (uint8_t *)&write_idx, sizeof(write_idx));
+    printf("Samples deleted\n");
+}

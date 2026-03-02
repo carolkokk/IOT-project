@@ -2,6 +2,7 @@
 #include <cstdio>
 #include "Structs.h"
 #include "PWM/PWM.h"
+#include "EEPROM/EEPROM.h"
 #include "Humidifier/Humidifier.h"
 #include "Dehumidifier/Dehumidifier.h"
 #include <cmath>
@@ -12,9 +13,12 @@
 
 Control::Control(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, EventGroupHandle_t event_group, TickType_t period,
+    std::shared_ptr<PicoI2C> i2cbus0, std::shared_ptr<EEPROM> eeprom,
     uint32_t stack_size,
     UBaseType_t priority) :
-    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),event_group(event_group),period(period){
+    to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),event_group(event_group),period(period),
+    i2cbus0(std::move(i2cbus0)), eeprom(std::move(eeprom))
+{
 
     xTaskCreate(task_wrap, name, stack_size, this, priority, &task_handle);
     //create timer for retrieving data from sensors
@@ -43,8 +47,9 @@ void Control::task_impl() {
     Fan fan_hum(FAN_PIN);
 
     //temperature and humidity sensor
-    auto i2cbus0 = std::make_shared<PicoI2C>(0, 100000);
     BME680 rh_sensor(i2cbus0, 0x76);
+    // only write every 6th value to eeprom
+    uint8_t eeprom_val_write_counter = 0;
 
     // --- Water sensors ---
     WaterSensor dehum_water_sensor(DEHUM_WATER_PIN, true);
@@ -77,15 +82,25 @@ void Control::task_impl() {
         bool dehum_water_alarm  = !dehum_water_sensor.Read();
         bool humidifier_water_alarm     = humidifier_water_sensor.Read();
         EventBits_t bits = xEventGroupGetBits(event_group);
+        double temp, rh;
 
         if (ulTaskNotifyTake(pdTRUE,0)){
             printf("timer triggered\n");
-            temp_rh.temp = std::round(rh_sensor.read_temp() * 100.0) / 100.0;
-            temp_rh.rh = std::round(rh_sensor.read_rh() * 100.0) / 100.0;
+            if (rh_sensor.read_data(temp, rh)) {
+                temp_rh.temp = std::round(temp * 100.0) / 100.0;
+                temp_rh.rh = std::round(rh * 100.0) / 100.0;
+            }
+            //++eeprom_val_write_counter;
+            // for testing every measure value is saved, in real life probably would save evert 6th or 10th value
+            eeprom->writeSample(static_cast<float>(temp_rh.temp), static_cast<float>(temp_rh.rh));
             xQueueSendToBack(to_UI, &temp_rh, pdMS_TO_TICKS(100));
             if (bits & NETWORK_CONNECTED){
                 xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));
             }
+            /*if (eeprom_val_write_counter >= 6) {
+                eeprom->writeSample(static_cast<float>(temp_rh.temp), static_cast<float>(temp_rh.rh));
+                eeprom_val_write_counter = 0;
+            }*/
         }
 
         // dehumidifier water alarm, triggers when water is detected

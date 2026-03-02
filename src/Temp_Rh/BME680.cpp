@@ -34,7 +34,21 @@ BME680::BME680(std::shared_ptr<PicoI2C> i2cbus, uint8_t address):
     bme68x_set_heatr_conf(BME68X_FORCED_MODE, &heat, &dev);
 }
 
-double BME680::read_temp() {
+bool BME680::read_data(double &temp, double &rh) {
+    bme68x_set_op_mode(BME68X_FORCED_MODE, &dev);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    uint8_t n_fields;
+    struct bme68x_data data{};
+    int8_t result = bme68x_get_data(BME68X_FORCED_MODE, &data, &n_fields, &dev);
+    if (result != BME68X_OK || n_fields == 0) return false;
+
+    temp = data.temperature;
+    rh = data.humidity;
+    return true;
+}
+
+/*double BME680::read_temp() {
     bme68x_set_op_mode(BME68X_FORCED_MODE, &dev);
     vTaskDelay(100);
 
@@ -57,5 +71,5 @@ double BME680::read_rh()
     bme68x_get_data(BME68X_FORCED_MODE, &data, &n_fields, &dev);
 
     return data.humidity;
-}
+}*/
 

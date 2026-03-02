@@ -10,12 +10,7 @@
 extern "C" {
 int8_t bme_i2c_read(uint8_t reg, uint8_t *data, uint32_t len, void *intf_ptr) {
     auto context = static_cast<BME_I2C_Context*>(intf_ptr);
-
-    uint8_t regbuffer = reg;
-
-    context->bus->write(context->addr, &regbuffer, 1);
-    context->bus->read(context->addr, data, len);
-
+    context->bus->transaction(context->addr, &reg, 1, data, len);
     return BME68X_OK;
 }
 
@@ -32,6 +27,6 @@ int8_t bme_i2c_write(uint8_t reg, const uint8_t *data, uint32_t len, void *intf_
 }
 
 void bme_delay_us(uint32_t us, void *) {
-    sleep_us(us);
+    vTaskDelay(pdMS_TO_TICKS(us / 1000 + 1));
 }
 }
