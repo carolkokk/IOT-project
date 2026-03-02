@@ -4,6 +4,7 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include "task.h"
+#include "EEPROM/EEPROM.h"
 #include <memory>
 
 #include "event_groups.h"
@@ -79,6 +80,7 @@ private:
     uint8_t menu_selection;
     uint8_t set_rh_value;
     //uint8_t target_rh = 50;
+    //System_Status sys_status;
 
     // functions for loading different UI screens
     void load_main_screen(Message received, System_Status status);

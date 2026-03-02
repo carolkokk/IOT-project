@@ -14,22 +14,22 @@
 extern LVGLPort *g_lvgl_port;
 
 // for now calibration values depend on the display
-#define DISPLAY28
+#define DISPLAY2
 //#define DISPLAY24
 
 // calibration values for decting touch
-#ifdef DISPLAY28
+#ifdef DISPLAY1
 #define TOUCH_X_MIN 340
 #define TOUCH_X_MAX 3860
 #define TOUCH_Y_MIN 275
 #define TOUCH_Y_MAX 3890
 #endif
 
-#ifdef DISPLAY24
-#define TOUCH_X_MIN  285
-#define TOUCH_X_MAX  3951
-#define TOUCH_Y_MIN  414
-#define TOUCH_Y_MAX  3840
+#ifdef DISPLAY2
+#define TOUCH_X_MIN  272
+#define TOUCH_X_MAX  3839
+#define TOUCH_Y_MIN  190
+#define TOUCH_Y_MAX  3839
 #endif
 
 UI::UI(
@@ -206,7 +206,7 @@ void UI::init_UI() {
     // irq is enabled and rotation is set for touch
     touch = std::make_shared<XPT2046_Touch>(touch_device.get());
     //touch->begin();
-    touch->setRotation(0);
+    touch->setRotation(3);
 
     //touch integration for lvgl
     lvgl_touch = std::make_shared<LVGLTouch>(touch.get(), 320, 240);
@@ -499,7 +499,6 @@ void UI::keyboard_cb(lv_event_t *e) {
         xEventGroupSetBits(ui->event_group, CONNECTING_NETWORK);
         xQueueSendToBack(ui->credentials_to_network, &net_credentials, pdMS_TO_TICKS(portMAX_DELAY));
         ui->sys_status.initial_main = true;
-
         ui->navigate_to(MAIN);
     } else if (code == LV_EVENT_CANCEL) {
         ui->navigate_back();
