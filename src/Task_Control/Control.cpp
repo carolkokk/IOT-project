@@ -16,12 +16,22 @@ Control::Control(
     UBaseType_t priority) :
     to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control),event_group(event_group),period(period){
 
-    xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr); 
+    xTaskCreate(task_wrap, name, stack_size, this, priority, &task_handle);
+    //create timer for retrieving data from sensors
+    timer_handle = xTimerCreate("Control_timer",pdMS_TO_TICKS(20000),pdTRUE,this,timer_callback);
+    xTimerStart(timer_handle,0);
 }
 
 void Control::task_wrap(void *pvParameters) {
     auto *control = static_cast<Control*>(pvParameters);
     control->task_impl();
+}
+
+void Control::timer_callback(TimerHandle_t xTimer){
+    auto *control = static_cast<Control*>(pvTimerGetTimerID(xTimer));
+    if (control && control->task_handle){
+        xTaskNotifyGive(control->task_handle);
+    }
 }
 
 void Control::task_impl() {
@@ -44,7 +54,7 @@ void Control::task_impl() {
     humidifier_water_sensor.Init();
 
     //initial target rh
-    set_rh = 50;
+    set_rh = 45;
 
     //test structure where Control sends a number to both UI and Network
     TickType_t lastWakeTime = xTaskGetTickCount();
@@ -57,6 +67,9 @@ void Control::task_impl() {
     Message temp_rh{};
     temp_rh.type = TEMP_RH;
 
+    //give it for the first time for the ui to retrieve sensor data before timer is triggered.
+    xTaskNotifyGive(task_handle);
+
     while(true) {
         //xQueueSendToBack(to_UI, &send_numbers, portMAX_DELAY);
         //xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
@@ -64,6 +77,16 @@ void Control::task_impl() {
         bool dehum_water_alarm  = !dehum_water_sensor.Read();
         bool humidifier_water_alarm     = humidifier_water_sensor.Read();
         EventBits_t bits = xEventGroupGetBits(event_group);
+
+        if (ulTaskNotifyTake(pdTRUE,0)){
+            printf("timer triggered\n");
+            temp_rh.temp = std::round(rh_sensor.read_temp() * 100.0) / 100.0;
+            temp_rh.rh = std::round(rh_sensor.read_rh() * 100.0) / 100.0;
+            xQueueSendToBack(to_UI, &temp_rh, pdMS_TO_TICKS(100));
+            if (bits & NETWORK_CONNECTED){
+                xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));
+            }
+        }
 
         // dehumidifier water alarm, triggers when water is detected
         if (dehum_water_alarm) {
@@ -84,28 +107,12 @@ void Control::task_impl() {
         }
 
         while (xQueueReceive(to_Control,&received,pdMS_TO_TICKS(10))) {
-            /*if (received.type == TEST_STRING){
-                printf("received %s\n",received.string);
-            }else if (received.type == TEST_NUMBER)
-            {
-                printf("received %u\n",received.number);
-            }*/
             if (received.type == TARGET_RH) {
                 printf("New target rh: %d\n", static_cast<uint8_t>(received.target_rh));
                 set_rh = static_cast<uint8_t>(received.target_rh);
                 printf("set_rh in control task: %d\n", set_rh);
             }
         }
-
-        //printf("T: %.2f C\n", rh_sensor.read_temp());
-        //printf("RH: %.2f %%\n", rh_sensor.read_rh());
-        temp_rh.temp = std::round(rh_sensor.read_temp() * 100.0) / 100.0;
-        temp_rh.rh = std::round(rh_sensor.read_rh() * 100.0) / 100.0;
-        xQueueSendToBack(to_UI, &temp_rh, pdMS_TO_TICKS(100));
-        if (bits & NETWORK_CONNECTED){
-            xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));
-        }
-
 
         if (!humidifier_water_alarm && !dehum_water_alarm){
             // hum or dehum is on outside of the set_rh +-5% range
@@ -116,7 +123,7 @@ void Control::task_impl() {
                 fan_hum.fan_off();
             }
             else if (uin_rh < (set_rh - 5)) {
-                printf("set_rh in control task: %d\n", set_rh -5);
+                printf("set_rh in control task: %d\n", set_rh);
                 printf("current rh in control task: %d\n", static_cast<uint8_t>(temp_rh.rh));
                 dehumidifier.dehum_off();
                 humidifier.humidifier_on();
