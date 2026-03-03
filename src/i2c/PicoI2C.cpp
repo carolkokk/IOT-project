@@ -14,8 +14,8 @@
 #define I2C0_SDA_PIN 0
 #define I2C0_SCL_PIN 1
 
-#define I2C1_SDA_PIN 14
-#define I2C1_SCL_PIN 15
+#define I2C1_SDA_PIN 18
+#define I2C1_SCL_PIN 19
 
 PicoI2C *PicoI2C::i2c0_instance{nullptr};
 PicoI2C *PicoI2C::i2c1_instance{nullptr};
