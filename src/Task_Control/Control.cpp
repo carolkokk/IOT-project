@@ -92,7 +92,7 @@ void Control::task_impl() {
             }
             //++eeprom_val_write_counter;
             // for testing every measure value is saved, in real life probably would save evert 6th or 10th value
-            eeprom->writeSample(static_cast<float>(temp_rh.temp), static_cast<float>(temp_rh.rh));
+            eeprom->writeSample(static_cast<float>(temp_rh.rh), static_cast<float>(temp_rh.temp));
             xQueueSendToBack(to_UI, &temp_rh, pdMS_TO_TICKS(100));
             if (bits & NETWORK_CONNECTED){
                 xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));

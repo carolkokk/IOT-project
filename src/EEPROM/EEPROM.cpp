@@ -233,6 +233,14 @@ bool EEPROM::writeSample(float rh, float temp) {
         curr_idx = 0;
     }
 
+    uint16_t total = 0;
+    eepromRead(SAMPLE_COUNT_ADDR, (uint8_t *)&total, sizeof(total));
+    if (total == 0xFFFF) total = 0; // when nothing is yet written
+    if (total < SAMPLE_COUNT) {
+        total++;
+        eepromWrite(SAMPLE_COUNT_ADDR, (uint8_t *)&total, sizeof(total));
+    }
+
     uint8_t buf[SAMPLE_SIZE];
     memcpy(buf, &rh, 4);
     memcpy(buf + 4, &temp, 4);
@@ -250,15 +258,17 @@ bool EEPROM::writeSample(float rh, float temp) {
 bool EEPROM::readAllSamples(Measure_history *samples, uint8_t &count) {
     uint16_t write_idx = 0;
     eepromRead(SAMPLE_IDX_ADDR, (uint8_t *)&write_idx, sizeof(write_idx));
-    if (write_idx >= SAMPLE_COUNT) {
-        write_idx = 0;
-    }
+
+    uint16_t total = 0;
+    eepromRead(SAMPLE_COUNT_ADDR, (uint8_t *)&total, sizeof(total));
+    if (total > SAMPLE_COUNT) total = SAMPLE_COUNT;
 
     count = 0;
     uint8_t buf[SAMPLE_SIZE];
+    uint16_t start = (write_idx + SAMPLE_COUNT - total) % SAMPLE_COUNT;
     // reading oldest to newest samples
-    for (uint8_t i = 0; i < SAMPLE_COUNT; ++i) {
-        uint16_t slot = (write_idx + i) % SAMPLE_COUNT;
+    for (uint8_t i = 0; i < total; ++i) {
+        uint16_t slot = (start + i) % SAMPLE_COUNT;
         uint16_t addr = SAMPLE_DATA_ADDR + slot * SAMPLE_SIZE;
 
         if (eepromRead(addr, buf, SAMPLE_SIZE)) {
@@ -283,5 +293,7 @@ void EEPROM::deleteSamples() {
     }
     uint16_t write_idx = 0;
     eepromWrite(SAMPLE_IDX_ADDR, (uint8_t *)&write_idx, sizeof(write_idx));
+    uint16_t total = 0;
+    eepromWrite(SAMPLE_COUNT_ADDR, (uint8_t *)&total, sizeof(total));
     printf("Samples deleted\n");
 }
