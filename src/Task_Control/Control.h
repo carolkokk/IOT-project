@@ -13,7 +13,10 @@
 
 class Control {
 public:
-    Control(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, EventGroupHandle_t event_group, TickType_t period, uint32_t stack_size = 1024, UBaseType_t priority = tskIDLE_PRIORITY + 2);
+    Control(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control,
+        EventGroupHandle_t event_group, TickType_t period,
+        std::shared_ptr<PicoI2C> i2cbus0, std::shared_ptr<EEPROM> eeprom,
+        uint32_t stack_size = 1024, UBaseType_t priority = tskIDLE_PRIORITY + 2);
     static void task_wrap(void *pvParameters);
     static void timer_callback(TimerHandle_t xTimer);
 
@@ -28,6 +31,9 @@ private:
     EventGroupHandle_t event_group;
     TaskHandle_t task_handle = nullptr;
     TimerHandle_t timer_handle = nullptr;
+
+    std::shared_ptr<PicoI2C> i2cbus0;
+    std::shared_ptr<EEPROM> eeprom;
 };
 
 #endif //CONTROL_H

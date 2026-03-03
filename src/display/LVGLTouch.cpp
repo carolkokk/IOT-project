@@ -48,7 +48,7 @@ void LVGLTouch::read(lv_indev_data_t *data) {
 
     uint16_t raw_x, raw_y, raw_z;
     touch->readData(&raw_x, &raw_y, &raw_z);  // calls update() once
-    printf("RAW: x=%d, y=%d, z=%d\n", raw_x, raw_y, raw_z);
+    //printf("RAW: x=%d, y=%d, z=%d\n", raw_x, raw_y, raw_z);
 
     if (raw_z >= 300) {
         data->point.x = mapX(raw_x);

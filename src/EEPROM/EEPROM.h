@@ -3,6 +3,7 @@
 
 #include "pico/stdlib.h"
 #include "PicoI2C.h"
+#include "Structs.h"
 #include <cstring>
 #include <string>
 #include <memory>
@@ -10,7 +11,6 @@
 #define EEPROM_ADDRESS 0x50
 #define STATUS_BUFF_SIZE 8 // for status updates
 #define STR_BUFFER_SIZE 64 //for log messages
-#define STATUS_MSG_COUNT 3
 
  // 5 addresses saved for status updates like co2_set val or reboot detect
 //addresses for specific status updates
@@ -18,8 +18,7 @@
 #define REBOOT_FLAG "REBOOT"
 #define RUN_FLAG "RUN"
 
-#define CO2_SET_ADDR 0x08
-#define FAN_SPEED_ADDR 0x10
+#define RH_SET_ADDR 0x08
 
 #define LOG_COUNT 10 // max log messages until log entries are deleted
 
@@ -30,6 +29,14 @@
 #define MIN_LOG_ADDR (WIFI_PASS_ADDR + STR_BUFFER_SIZE)
 #define MAX_LOG_ADDRESS (MIN_LOG_ADDR + (LOG_COUNT - 1) * STR_BUFFER_SIZE)
 #define LOG_ADDR_STORAGE (MAX_LOG_ADDRESS + STR_BUFFER_SIZE)
+
+// saving sensor data for plotting
+#define SAMPLE_SIZE 10 // 2*float + crc
+#define SAMPLE_COUNT 50
+#define SAMPLE_IDX_ADDR (LOG_ADDR_STORAGE + 2)
+#define SAMPLE_DATA_ADDR (SAMPLE_IDX_ADDR + 2)
+#define SAMPLE_END_ADDR (SAMPLE_DATA_ADDR + SAMPLE_COUNT * SAMPLE_SIZE)
+#define SAMPLE_COUNT_ADDR (SAMPLE_END_ADDR)
 
 class EEPROM {
 public:
@@ -45,6 +52,11 @@ public:
     void printAllLogs();
     void deleteLogs();
     bool isLogEmpty(uint16_t *next_addr);
+
+    // functions for sample saving
+    bool writeSample(float rh, float temp);
+    bool readAllSamples(Measure_history *samples, uint8_t &count);
+    void deleteSamples();
 
     // direct access functions
     bool eepromWrite(uint16_t address, const uint8_t *data, size_t data_len);

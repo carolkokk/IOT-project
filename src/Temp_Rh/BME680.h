@@ -12,8 +12,9 @@
 class BME680 {
     public:
         BME680(std::shared_ptr<PicoI2C> i2cbus, uint8_t address);
-        double read_temp();
-        double read_rh();
+        bool read_data(double &temp, double &rh);
+        //double read_temp();
+        //double read_rh();
     private:
         std::shared_ptr<PicoI2C> i2c;
         uint8_t address;

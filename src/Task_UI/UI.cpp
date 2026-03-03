@@ -34,9 +34,10 @@ extern LVGLPort *g_lvgl_port;
 
 UI::UI(
     QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue, QueueHandle_t credentials_to_network,
-    EventGroupHandle_t event_group, TickType_t period, uint32_t stack_size, UBaseType_t priority) :
+    EventGroupHandle_t event_group, TickType_t period, std::shared_ptr<EEPROM> eeprom,
+    uint32_t stack_size, UBaseType_t priority) :
     to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),credentials_to_network(credentials_to_network),
-    event_group(event_group), period(period){
+    event_group(event_group), period(period), eeprom(std::move(eeprom)){
 
     init_UI();
 
@@ -69,20 +70,30 @@ void UI::task_impl() {
     sys_status.initial_main = true;
     load_main_screen(sensor_data, sys_status);
     bool prev_network_connected = false;
+    bool prev_refill = false;
+    bool prev_overflow = false;
 
     while(true) {
         EventBits_t bits = xEventGroupGetBits(event_group);
 
-        bool now_connected = bits & NETWORK_CONNECTED;
-        bool now_connecting = bits & CONNECTING_NETWORK;
+        sys_status.network_connected = bits & NETWORK_CONNECTED;
+        sys_status.connecting_network = bits & CONNECTING_NETWORK;
 
-        sys_status.network_connected = now_connected;
-        sys_status.connecting_network = now_connecting;
-
-        if (now_connected != prev_network_connected) {
-            prev_network_connected = now_connected;
+        if (sys_status.network_connected != prev_network_connected) {
+            prev_network_connected =sys_status.network_connected;
             if (current_screen == MAIN) {
-                update_main_screen(sys_status);
+                update_wifi_status(sys_status);
+            }
+        }
+
+        sys_status.refill_water = bits & EVT_NO_WATER;
+        sys_status.water_overflow = bits & EVT_WATER_PRESENT;
+
+        if (sys_status.refill_water != prev_refill || sys_status.water_overflow != prev_overflow) {
+            prev_refill = sys_status.refill_water;
+            prev_overflow = sys_status.water_overflow;
+            if (current_screen == MAIN) {
+                update_water_status(sys_status);
             }
         }
 
@@ -125,6 +136,9 @@ void UI::task_impl() {
                 case 1:
                     navigate_to(NETWORK);
                     break;
+                case 2:
+                    navigate_to(STATISTICS);
+                    break;
             }
         }
 
@@ -144,6 +158,12 @@ void UI::task_impl() {
             navigate_back();
         }
 
+        if (current_screen == CONNECTING_WIFI) {
+            if (!(bits & CONNECTING_NETWORK)) {
+                navigate_to(MAIN);
+            }
+        }
+
         if (current_screen != next_screen) {
             current_screen = next_screen;
 
@@ -153,6 +173,8 @@ void UI::task_impl() {
 
             switch (current_screen) {
                 case MAIN:
+                    tank_status_label = nullptr;
+                    sys_status.initial_main = true;
                     load_main_screen(sensor_data, sys_status);
                     break;
                 case SET_RH:
@@ -176,6 +198,12 @@ void UI::task_impl() {
                 }
                 case ENTER_PASS:
                     load_password_screen();
+                    break;
+                case CONNECTING_WIFI:
+                    load_connecting_wifi_screen();
+                    break;
+                case STATISTICS:
+                    load_statistics_screen();
                     break;
             }
         }
@@ -295,15 +323,27 @@ void UI::load_main_screen(Message received, System_Status status) {
     }
 }
 
-void UI::update_main_screen(System_Status status) {
+void UI::update_wifi_status(System_Status status) {
     // update wifi icon color
     lv_color_t wifi_status_color = status.network_connected ? lv_color_hex(0x18cc57) : lv_color_hex(0x0040ff);
     lv_obj_set_style_text_color(network_icon, wifi_status_color, 0);
-
-    // update
-
 }
 
+void UI::update_water_status(System_Status status) {
+    if (tank_status_label == nullptr) {
+        tank_status_label = lv_label_create(lv_screen_active());
+        lv_obj_align(tank_status_label, LV_ALIGN_LEFT_MID, 65, 8);
+        lv_obj_set_style_text_color(tank_status_label, lv_color_hex(0x0040ff), 0);
+    }
+
+    if (status.refill_water) {
+        lv_label_set_text(tank_status_label, "REFILL");
+    } else if (status.water_overflow) {
+        lv_label_set_text(tank_status_label, "OVERFLOW");
+    } else {
+        lv_label_set_text(tank_status_label, "");
+    }
+}
 
 void UI::dd_menu_callback(lv_event_t* e) {
     auto ui = (UI*)lv_event_get_user_data(e);
@@ -325,6 +365,9 @@ void UI::load_rh_set_screen(uint8_t target_rh) {
     lv_slider_set_value(slider, target_rh, LV_ANIM_OFF);
 
     lv_obj_set_style_anim_duration(slider, 1000, 0);
+    lv_obj_set_style_bg_color(slider, lv_color_hex(0xbfa782), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(slider, lv_color_hex(0xb8945f), LV_PART_KNOB);
+
     slider_label = lv_label_create(lv_screen_active());
     lv_obj_set_style_text_color(slider_label, lv_color_white(), 0);
 
@@ -337,7 +380,7 @@ void UI::load_rh_set_screen(uint8_t target_rh) {
     lv_obj_align_to(slider_label, slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 
     // button to save the new set rh
-    create_button(save_btn_event_cb, LV_ALIGN_CENTER, 0, 0, "SAVE");
+    create_button(save_btn_event_cb, LV_ALIGN_CENTER, 0, 40, "SAVE");
     // button to open pre-set page
     create_button(preset_btn_event_cb, LV_ALIGN_CENTER, 0, 0, "CHOOSE PRESET");
     // button to cancel
@@ -423,7 +466,7 @@ void UI::load_network_screen(bool network_connected) {
     const char *status = network_connected ? "Status: CONNECTED" : "Status: DISCONNECTED";
     lv_label_set_text(network_status_label,  status);
     lv_obj_set_style_text_color(network_status_label, lv_color_white(), 0);
-    lv_obj_align(network_status_label, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_align(network_status_label, LV_ALIGN_TOP_MID, 0, 40);
     create_button(search_networks_btn_cb, LV_ALIGN_TOP_MID, 0, 120, "NEW CONNECTION");
     create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
@@ -498,12 +541,61 @@ void UI::keyboard_cb(lv_event_t *e) {
         net_credentials = ui->credentials;
         xEventGroupSetBits(ui->event_group, CONNECTING_NETWORK);
         xQueueSendToBack(ui->credentials_to_network, &net_credentials, pdMS_TO_TICKS(portMAX_DELAY));
-        ui->sys_status.initial_main = true;
-        ui->navigate_to(MAIN);
+        EventBits_t bits = xEventGroupGetBits(ui->event_group);
+        if (bits & CONNECTING_NETWORK) {
+            ui->navigate_to(CONNECTING_WIFI);
+        } else {
+            ui->navigate_to(MAIN);
+        }
     } else if (code == LV_EVENT_CANCEL) {
         ui->navigate_back();
     }
 }
+
+void UI::load_connecting_wifi_screen() {
+    lv_obj_t *spinner = lv_spinner_create(lv_screen_active());
+    lv_obj_set_size(spinner, 100, 100);
+    lv_obj_center(spinner);
+    lv_spinner_set_anim_params(spinner, 5000, 100);
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(0xbfa782), LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(0x2162cc), LV_PART_MAIN);
+}
+
+void UI::load_statistics_screen() {
+    lv_obj_t *chart;
+    chart = lv_chart_create(lv_screen_active());
+    lv_obj_set_size(chart, 280, 160);
+    lv_obj_align(chart, LV_ALIGN_TOP_MID, 15, 10);
+    lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
+
+    lv_obj_t *scale = lv_scale_create(lv_screen_active());
+    lv_scale_set_mode(scale, LV_SCALE_MODE_VERTICAL_LEFT);
+    lv_obj_set_size(scale, 20, 160);
+    lv_obj_set_style_text_color(scale, lv_color_white(), 0);
+    lv_obj_align(scale, LV_ALIGN_TOP_LEFT, 15, 10);
+    lv_scale_set_total_tick_count(scale, 11);
+    lv_scale_set_major_tick_every(scale, 2);
+    lv_scale_set_range(scale, 0, 100);
+
+    lv_chart_series_t * rh_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t * temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
+
+    lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y,0,1000);
+    lv_chart_set_range(chart, LV_CHART_AXIS_SECONDARY_Y,0,500);
+
+    Measure_history samples[SAMPLE_COUNT];
+    uint8_t count = 0;
+
+    if (eeprom->readAllSamples(samples, count)) {
+        lv_chart_set_point_count(chart, count);
+        for (uint8_t i = 0; i < count; ++i) {
+            lv_chart_set_next_value(chart, rh_series, (int16_t)(samples[i].rh * 10));
+            lv_chart_set_next_value(chart, temp_series, (int16_t)(samples[i].temp * 10));
+        }
+    }
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, "< ");
+}
+
 
 void UI::create_button(lv_event_cb_t event_cb, lv_align_t align, int32_t x_ofs, int32_t y_ofs, const char *text) {
     lv_obj_t* btn = lv_button_create(lv_screen_active());
