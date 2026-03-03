@@ -70,7 +70,8 @@ void UI::task_impl() {
     sys_status.initial_main = true;
     load_main_screen(sensor_data, sys_status);
     bool prev_network_connected = false;
-    bool prev_water_alarm = false;
+    bool prev_refill = false;
+    bool prev_overflow = false;
 
     while(true) {
         EventBits_t bits = xEventGroupGetBits(event_group);
@@ -87,15 +88,14 @@ void UI::task_impl() {
 
         sys_status.refill_water = bits & EVT_NO_WATER;
         sys_status.water_overflow = bits & EVT_WATER_PRESENT;
-        bool current_alarm = sys_status.refill_water || sys_status.water_overflow;
 
-        if (current_alarm != prev_water_alarm) {
-            prev_water_alarm = current_alarm;
+        if (sys_status.refill_water != prev_refill || sys_status.water_overflow != prev_overflow) {
+            prev_refill = sys_status.refill_water;
+            prev_overflow = sys_status.water_overflow;
             if (current_screen == MAIN) {
                 update_water_status(sys_status);
             }
         }
-
 
         while (xQueueReceive(to_UI,&received,pdMS_TO_TICKS(10))) {
             if (received.type == TEMP_RH) {
@@ -173,6 +173,7 @@ void UI::task_impl() {
 
             switch (current_screen) {
                 case MAIN:
+                    tank_status_label = nullptr;
                     sys_status.initial_main = true;
                     load_main_screen(sensor_data, sys_status);
                     break;
@@ -329,9 +330,12 @@ void UI::update_wifi_status(System_Status status) {
 }
 
 void UI::update_water_status(System_Status status) {
-    tank_status_label = lv_label_create(lv_screen_active());
-    lv_obj_align(tank_status_label, LV_ALIGN_LEFT_MID, 65, 8);
-    lv_obj_set_style_text_color(tank_status_label, lv_color_hex(0x0040ff), 0);
+    if (tank_status_label == nullptr) {
+        tank_status_label = lv_label_create(lv_screen_active());
+        lv_obj_align(tank_status_label, LV_ALIGN_LEFT_MID, 65, 8);
+        lv_obj_set_style_text_color(tank_status_label, lv_color_hex(0x0040ff), 0);
+    }
+
     if (status.refill_water) {
         lv_label_set_text(tank_status_label, "REFILL");
     } else if (status.water_overflow) {
