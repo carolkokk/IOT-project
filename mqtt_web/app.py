@@ -173,6 +173,10 @@ def login():
 
     return send_from_directory(".", "login.html")
 
+@app.route('/icons/<path:filename>')
+def serve_icons(filename):
+    return send_from_directory('icons', filename)
+
 @app.get("/logout")
 def logout():
     session.clear()
