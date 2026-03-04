@@ -1,133 +1,48 @@
 <!doctype html>
 <html lang="en">
 <head>
+
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <title>HUMIBOX Login</title>
 
-<style>
+<link rel="stylesheet" href="/style.css">
 
-/* =========================
-   Global Style (Unified)
-========================= */
-
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background-color: #f3f4f6;
-    color: #111827;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-}
-
-/* =========================
-   Login Card
-========================= */
-
-.login-card {
-    width: 360px;
-    background: white;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-}
-
-.login-card h2 {
-    margin-top: 0;
-    margin-bottom: 20px;
-    text-align: center;
-    font-weight: normal;
-}
-
-/* =========================
-   Input Fields
-========================= */
-
-.input-group {
-    margin-bottom: 15px;
-}
-
-input {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 14px;
-    box-sizing: border-box;
-}
-
-input:focus {
-    outline: none;
-    border-color: #2563eb;
-}
-
-/* =========================
-   Button
-========================= */
-
-.primary-btn {
-    width: 100%;
-    padding: 10px;
-    background-color: #2563eb;
-    border: none;
-    color: white;
-    font-size: 14px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.primary-btn:hover {
-    background-color: #1e40af;
-}
-
-/* =========================
-   Footer
-========================= */
-
-.footer-text {
-    margin-top: 15px;
-    font-size: 12px;
-    text-align: center;
-    color: #6b7280;
-}
-
-</style>
 </head>
 
-<body>
+<body class="login-page">
 
 <div class="login-card">
 
-    <h2>HUMIBOX Control Panel</h2>
+<h2>HUMIBOX Control Panel</h2>
 
-    <form method="POST" autocomplete="on">
+<form method="POST" autocomplete="on">
 
-        <div class="input-group">
-            <input name="username"
-                   placeholder="Username"
-                   required
-                   autocomplete="username">
-        </div>
+<div class="input-group">
+<input name="username"
+placeholder="Username"
+required
+autocomplete="username">
+</div>
 
-        <div class="input-group">
-            <input name="password"
-                   type="password"
-                   placeholder="Password"
-                   required
-                   autocomplete="current-password">
-        </div>
+<div class="input-group">
+<input name="password"
+type="password"
+placeholder="Password"
+required
+autocomplete="current-password">
+</div>
 
-        <button type="submit" class="primary-btn">
-            Sign In
-        </button>
+<button type="submit" class="primary-btn">
+Sign In
+</button>
 
-    </form>
+</form>
 
-    <div class="footer-text">
-        Secure IoT Monitoring System
-    </div>
+<div class="footer-text">
+Secure IoT Monitoring System
+</div>
 
 </div>
 
