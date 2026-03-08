@@ -27,6 +27,12 @@ private:
     QueueHandle_t to_Network;
     QueueHandle_t to_Control;
     TickType_t period;
+
+    //variables for humidifier (turn on 4s at a time)
+    TickType_t humidifier_on_start = 0;
+    bool humidifier_on = false;
+    TickType_t on_period = pdMS_TO_TICKS(4000);
+
     uint8_t set_rh;
     EventGroupHandle_t event_group;
     TaskHandle_t task_handle = nullptr;
