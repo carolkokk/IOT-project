@@ -14,7 +14,7 @@
 extern LVGLPort *g_lvgl_port;
 
 // for now calibration values depend on the display
-#define DISPLAY3
+#define DISPLAY2
 
 // calibration values for decting touch
 #ifdef DISPLAY1
@@ -45,8 +45,6 @@ UI::UI(
     to_UI(to_UI), to_Network(to_Network) ,to_Control (to_Control), scan_results_queue(scan_results_queue),credentials_to_network(credentials_to_network),
     event_group(event_group), period(period), eeprom(std::move(eeprom)){
 
-    init_UI();
-
     xTaskCreate(task_wrap, name, stack_size, this, priority, nullptr);
 }
 
@@ -56,18 +54,26 @@ void UI::task_wrap(void *pvParameters) {
 }
 
 void UI::task_impl() {
+    init_UI();
+
     // black background
     lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x4a5756), 0);
 
     //test structure where UI sends a message to both Network and control
     TickType_t lastWakeTime = xTaskGetTickCount();
+    Message msg{};
     Message send{};
     Message received{};
 
     sensor_data.temp = 0.0;
     sensor_data.rh = 0.0;
-    //for testing initial value is a num
-    sensor_data.target_rh = 50;
+    eeprom->eepromRead(RH_SET_ADDR, &sensor_data.target_rh, sizeof(sensor_data.target_rh));
+    msg.type = TARGET_RH;
+    msg.target_rh = sensor_data.target_rh;
+    xQueueSendToBack(to_Control, &msg, portMAX_DELAY);
+    if (sensor_data.target_rh < min_set_rh || sensor_data.target_rh > max_set_rh) {
+        sensor_data.target_rh = 50;  // default val
+    }
     sensor_data.type = TEMP_RH;
 
     current_screen = MAIN;
@@ -80,16 +86,22 @@ void UI::task_impl() {
     bool prev_overflow = false;
 
     while(true) {
+        // check for all the alarms or errors
         EventBits_t bits = xEventGroupGetBits(event_group);
 
         sys_status.network_connected = bits & NETWORK_CONNECTED;
         sys_status.connecting_network = bits & CONNECTING_NETWORK;
+        sys_status.bad_auth = bits & BAD_AUTH;
 
         if (sys_status.network_connected != prev_network_connected) {
             prev_network_connected =sys_status.network_connected;
             if (current_screen == MAIN) {
                 update_wifi_status(sys_status);
             }
+        }
+        if (sys_status.bad_auth && current_screen == CONNECTING_WIFI) {
+            xEventGroupClearBits(event_group, BAD_AUTH | CONNECTING_NETWORK);
+            navigate_to(MAIN);
         }
 
         sys_status.refill_water = bits & EVT_NO_WATER;
@@ -117,6 +129,7 @@ void UI::task_impl() {
             }
             if (received.type == TARGET_RH) {
                 sensor_data.target_rh = received.target_rh;
+                eeprom->eepromWrite(RH_SET_ADDR, &sensor_data.target_rh, sizeof(sensor_data.target_rh));
                 printf("UI RECEIVED set rh: %d", received.target_rh);
             }
         }
@@ -151,8 +164,9 @@ void UI::task_impl() {
         if (rh_val_saved) {
             rh_val_saved = false;
             sensor_data.target_rh = set_rh_value;
+            eeprom->eepromWrite(RH_SET_ADDR, &sensor_data.target_rh, sizeof(sensor_data.target_rh));
             // send new target rh value to queues
-            Message msg{};
+
             msg.type = TARGET_RH;
             msg.target_rh = sensor_data.target_rh;
             xQueueSendToBack(to_Control, &msg, portMAX_DELAY);
@@ -182,6 +196,9 @@ void UI::task_impl() {
                     tank_status_label = nullptr;
                     sys_status.initial_main = true;
                     load_main_screen(sensor_data, sys_status);
+                    if (sys_status.bad_auth) {
+                        update_wifi_status(sys_status);
+                    }
                     break;
                 case SET_RH:
                     load_rh_set_screen(sensor_data.target_rh);
@@ -240,7 +257,7 @@ void UI::init_UI() {
     // irq is enabled and rotation is set for touch
     touch = std::make_shared<XPT2046_Touch>(touch_device.get());
     //touch->begin();
-    touch->setRotation(0);
+    touch->setRotation(3);
 
     //touch integration for lvgl
     lvgl_touch = std::make_shared<LVGLTouch>(touch.get(), 320, 240);
@@ -333,6 +350,12 @@ void UI::update_wifi_status(System_Status status) {
     // update wifi icon color
     lv_color_t wifi_status_color = status.network_connected ? lv_color_hex(0x18cc57) : lv_color_hex(0x0040ff);
     lv_obj_set_style_text_color(network_icon, wifi_status_color, 0);
+    if (status.bad_auth) {
+        lv_obj_t * bad_auth_label = lv_label_create(lv_screen_active());
+        lv_obj_set_style_text_color(bad_auth_label, lv_color_hex(0x0040ff), 0);
+        lv_label_set_text(bad_auth_label, "BAD PASS");
+        lv_obj_set_pos(bad_auth_label, 75, 150);
+    }
 }
 
 void UI::update_water_status(System_Status status) {
@@ -367,7 +390,7 @@ void UI::load_rh_set_screen(uint8_t target_rh) {
 
     lv_obj_add_event_cb(slider, slider_event_cb, LV_EVENT_VALUE_CHANGED, this);
 
-    lv_slider_set_range(slider, 35, 65);
+    lv_slider_set_range(slider, min_set_rh, max_set_rh);
     lv_slider_set_value(slider, target_rh, LV_ANIM_OFF);
 
     lv_obj_set_style_anim_duration(slider, 1000, 0);

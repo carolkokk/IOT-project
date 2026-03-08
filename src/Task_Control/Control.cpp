@@ -59,7 +59,7 @@ void Control::task_impl() {
     humidifier_water_sensor.Init();
 
     //initial target rh
-    set_rh = 45;
+    eeprom->eepromRead(RH_SET_ADDR, &set_rh, sizeof(set_rh));
     uint8_t in_range_rh = set_rh;
 
     //test structure where Control sends a number to both UI and Network
@@ -77,31 +77,48 @@ void Control::task_impl() {
     xTaskNotifyGive(task_handle);
 
     while(true) {
-
         bool dehum_water_alarm  = !dehum_water_sensor.Read();
         bool humidifier_water_alarm     = humidifier_water_sensor.Read();
         EventBits_t bits = xEventGroupGetBits(event_group);
         double temp, rh;
 
-        if (ulTaskNotifyTake(pdTRUE,0)){
+        if (ulTaskNotifyTake(pdTRUE,0)) {
             if (rh_sensor.read_data(temp, rh)) {
                 temp_rh.temp = std::round(temp * 100.0) / 100.0;
                 temp_rh.rh = std::round(rh * 100.0) / 100.0;
-            }
-            printf("timer triggered\n");
-            humidifier_on = false;
-            ++eeprom_val_write_counter;
-            // for testing every measure value is saved, in real life probably would save evert 6th or 10th value
-            //eeprom->writeSample(static_cast<float>(temp_rh.rh), static_cast<float>(temp_rh.temp));
-            xQueueSendToBack(to_UI, &temp_rh, pdMS_TO_TICKS(100));
-            if (bits & NETWORK_CONNECTED){
-                xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));
-            }
-            if (eeprom_val_write_counter >= 6) {
-                eeprom->writeSample(static_cast<float>(temp_rh.temp), static_cast<float>(temp_rh.rh));
-                eeprom_val_write_counter = 0;
+                printf("timer triggered\n");
+                double current_rh = temp_rh.rh;
+                // for testing every measure value is saved, in real life probably would save evert 6th or 10th value
+                //eeprom->writeSample(static_cast<float>(temp_rh.rh), static_cast<float>(temp_rh.temp));
+                xQueueSendToBack(to_UI, &temp_rh, pdMS_TO_TICKS(100));
+                if (bits & NETWORK_CONNECTED){
+                    xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));
+                }
+                //if (!humidifier_water_alarm && !dehum_water_alarm) {
+                if (current_rh < set_rh) {
+                    dehumidifier.dehum_off();
+                    humidifier.humidifier_on();
+                    fan_hum.fan_on();
+                    vTaskDelay(humidifier_on_interval);
+                    humidifier.humidifier_off();
+                    //fan_hum.fan_off();
+                } else if (current_rh > set_rh + 5) {
+                    humidifier.humidifier_off();
+                    fan_hum.fan_off();
+                    dehumidifier.dehum_on();
+                } else {
+                    dehumidifier.dehum_off();
+                    humidifier.humidifier_off();
+                    fan_hum.fan_off();
+                }
+                ++eeprom_val_write_counter;
+                if (eeprom_val_write_counter >= 6) {
+                    eeprom->writeSample(static_cast<float>(temp_rh.temp), static_cast<float>(temp_rh.rh));
+                    eeprom_val_write_counter = 0;
+                }
             }
         }
+        //}
 
         // dehumidifier water alarm, triggers when water is detected
         if (dehum_water_alarm) {
@@ -128,51 +145,6 @@ void Control::task_impl() {
                 in_range_rh = set_rh;
                 printf("set_rh in control task: %d\n", set_rh);
             }
-        }
-
-        if (!humidifier_water_alarm && !dehum_water_alarm){
-            // hum or dehum is on outside of the set_rh +-5% range
-            uint8_t uin_rh = static_cast<uint8_t>(temp_rh.rh);
-            if (uin_rh >= in_range_rh -5 && uin_rh <= in_range_rh +5) {
-                in_range_rh = set_rh;
-                dehumidifier.dehum_off();
-                humidifier.humidifier_off();
-                humidifier_on = false;
-                fan_hum.fan_off();
-            }
-            else if (uin_rh < set_rh) {
-                in_range_rh = set_rh + 5;
-                dehumidifier.dehum_off();
-                printf("set_rh in control task: %d\n", set_rh);
-                printf("current rh in control task: %d\n", static_cast<uint8_t>(temp_rh.rh));
-                if (!humidifier_on) {
-                    humidifier.humidifier_on();
-                    fan_hum.fan_on();
-                    printf("Humidifier on\n");
-                    printf("Fan on\n");
-                    humidifier_on_start = xTaskGetTickCount();
-                    humidifier_on = true;
-                } else if (xTaskGetTickCount() - humidifier_on_start > on_period) {
-                    humidifier.humidifier_off();
-                    fan_hum.fan_off();
-                    printf("Humidifier off\n");
-                }
-            } else if (uin_rh > set_rh) {
-                in_range_rh = set_rh - 5;
-                humidifier.humidifier_off();
-                humidifier_on = false;
-                fan_hum.fan_off();
-                printf("Humidifier off \n");
-                printf("Fan off \n");
-                dehumidifier.dehum_on();
-                printf("Dehumidifier on\n");
-            }
-        }else{
-            //turn off all the devices if alarm is triggered
-            dehumidifier.dehum_off();
-            humidifier.humidifier_off();
-            humidifier_on = false;
-            fan_hum.fan_off();
         }
 
         vTaskDelayUntil(&lastWakeTime, period);

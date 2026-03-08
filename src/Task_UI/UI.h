@@ -64,6 +64,9 @@ private:
 
     Message sensor_data;
 
+    int32_t min_set_rh = 35;
+    int32_t max_set_rh = 65;
+
     std::shared_ptr<PicoSPIBus> spi_0;
     std::shared_ptr<PicoSPIBus> spi_1;
     std::shared_ptr<PicoSPIDevice> display_device;
