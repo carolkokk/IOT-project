@@ -22,7 +22,7 @@ Control::Control(
 
     xTaskCreate(task_wrap, name, stack_size, this, priority, &task_handle);
     //create timer for retrieving data from sensors
-    timer_handle = xTimerCreate("Control_timer",pdMS_TO_TICKS(20000),pdTRUE,this,timer_callback);
+    timer_handle = xTimerCreate("Control_timer",pdMS_TO_TICKS(15000),pdTRUE,this,timer_callback);
     xTimerStart(timer_handle,0);
 }
 
@@ -60,6 +60,7 @@ void Control::task_impl() {
 
     //initial target rh
     set_rh = 45;
+    uint8_t in_range_rh = set_rh;
 
     //test structure where Control sends a number to both UI and Network
     TickType_t lastWakeTime = xTaskGetTickCount();
@@ -76,8 +77,6 @@ void Control::task_impl() {
     xTaskNotifyGive(task_handle);
 
     while(true) {
-        //xQueueSendToBack(to_UI, &send_numbers, portMAX_DELAY);
-        //xQueueSendToBack(to_Network, &send_numbers, portMAX_DELAY);
 
         bool dehum_water_alarm  = !dehum_water_sensor.Read();
         bool humidifier_water_alarm     = humidifier_water_sensor.Read();
@@ -85,11 +84,11 @@ void Control::task_impl() {
         double temp, rh;
 
         if (ulTaskNotifyTake(pdTRUE,0)){
-            printf("timer triggered\n");
             if (rh_sensor.read_data(temp, rh)) {
                 temp_rh.temp = std::round(temp * 100.0) / 100.0;
                 temp_rh.rh = std::round(rh * 100.0) / 100.0;
             }
+            printf("timer triggered\n");
             //++eeprom_val_write_counter;
             // for testing every measure value is saved, in real life probably would save evert 6th or 10th value
             eeprom->writeSample(static_cast<float>(temp_rh.rh), static_cast<float>(temp_rh.temp));
@@ -125,6 +124,7 @@ void Control::task_impl() {
             if (received.type == TARGET_RH) {
                 printf("New target rh: %d\n", static_cast<uint8_t>(received.target_rh));
                 set_rh = static_cast<uint8_t>(received.target_rh);
+                in_range_rh = set_rh;
                 printf("set_rh in control task: %d\n", set_rh);
             }
         }
@@ -132,12 +132,14 @@ void Control::task_impl() {
         if (!humidifier_water_alarm && !dehum_water_alarm){
             // hum or dehum is on outside of the set_rh +-5% range
             uint8_t uin_rh = static_cast<uint8_t>(temp_rh.rh);
-            if (uin_rh >= set_rh -5 && uin_rh <= set_rh +5) {
+            if (uin_rh >= in_range_rh -5 && uin_rh <= in_range_rh +5) {
+                in_range_rh = set_rh;
                 dehumidifier.dehum_off();
                 humidifier.humidifier_off();
                 fan_hum.fan_off();
             }
-            else if (uin_rh < (set_rh - 5)) {
+            else if (uin_rh < set_rh) {
+                in_range_rh = set_rh + 5;
                 printf("set_rh in control task: %d\n", set_rh);
                 printf("current rh in control task: %d\n", static_cast<uint8_t>(temp_rh.rh));
                 dehumidifier.dehum_off();
@@ -145,7 +147,8 @@ void Control::task_impl() {
                 fan_hum.fan_on();
                 printf("Humidifier on\n");
                 printf("Fan on\n");
-            } else if (uin_rh > set_rh + 5) {
+            } else if (uin_rh > set_rh) {
+                in_range_rh = set_rh - 5;
                 humidifier.humidifier_off();
                 fan_hum.fan_off();
                 printf("Humidifier off \n");
