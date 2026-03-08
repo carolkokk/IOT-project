@@ -75,9 +75,10 @@ uint16_t LVGLTouch::mapY(uint16_t raw_y) {
     if (raw_y < raw_y_min) raw_y = raw_y_min;
     if (raw_y > raw_y_max) raw_y = raw_y_max;
 
-    uint32_t mapped = (uint32_t)(raw_y - raw_y_min) * screen_height / (raw_y_max - raw_y_min);
-    if (mapped >= screen_height) mapped = screen_height - 1;
+    uint32_t mapped = (uint32_t)(raw_y_max - raw_y) * screen_height /
+                     (raw_y_max - raw_y_min);
 
+    if (mapped >= screen_height) mapped = screen_height - 1;
     return (uint16_t)mapped;
 }
 

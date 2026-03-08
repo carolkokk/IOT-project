@@ -14,8 +14,7 @@
 extern LVGLPort *g_lvgl_port;
 
 // for now calibration values depend on the display
-#define DISPLAY2
-//#define DISPLAY24
+#define DISPLAY3
 
 // calibration values for decting touch
 #ifdef DISPLAY1
@@ -30,6 +29,13 @@ extern LVGLPort *g_lvgl_port;
 #define TOUCH_X_MAX  3839
 #define TOUCH_Y_MIN  190
 #define TOUCH_Y_MAX  3839
+#endif
+
+#ifdef DISPLAY3
+#define TOUCH_X_MIN 230
+#define TOUCH_X_MAX 3967
+#define TOUCH_Y_MIN 250
+#define TOUCH_Y_MAX 3938
 #endif
 
 UI::UI(
@@ -234,7 +240,7 @@ void UI::init_UI() {
     // irq is enabled and rotation is set for touch
     touch = std::make_shared<XPT2046_Touch>(touch_device.get());
     //touch->begin();
-    touch->setRotation(3);
+    touch->setRotation(0);
 
     //touch integration for lvgl
     lvgl_touch = std::make_shared<LVGLTouch>(touch.get(), 320, 240);
