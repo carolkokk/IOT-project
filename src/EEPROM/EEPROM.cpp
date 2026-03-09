@@ -2,7 +2,6 @@
 
 #include <array>
 #include <vector>
-#include <bits/fs_fwd.h>
 
 EEPROM::EEPROM(std::shared_ptr<PicoI2C> i2cbus, uint8_t address):
     i2c(std::move(i2cbus)), addr(address) {}
@@ -122,7 +121,8 @@ bool EEPROM::readStatus(uint16_t address, std::string &status_buffer, size_t max
 
 // log impl
 uint16_t EEPROM::readLogAddress() {
-    uint16_t log_addr;
+    // default is set as invalid addr
+    uint16_t log_addr = 0xFFFF;
     if (!eepromRead(LOG_ADDR_STORAGE, (uint8_t *)&log_addr, sizeof(log_addr))) {
         return 0;
     }
@@ -189,30 +189,42 @@ bool EEPROM::writeLog(const char *message) {
     return true;
 }
 
+std::vector<std::string> EEPROM::getAllLogs() {
+    std::vector<std::string> logs;
+
+    for (uint16_t i = MIN_LOG_ADDR; i <= MAX_LOG_ADDRESS; i+= STR_BUFFER_SIZE) {
+        std::vector<uint8_t> read_buffer(STR_BUFFER_SIZE);
+        if (!eepromRead(i, read_buffer.data(), STR_BUFFER_SIZE)) {
+            logs.emplace_back("Failed to read log from EEPROM\n");
+            break;
+        }
+
+        if (read_buffer[0] != 0) {
+            size_t message_len = 0;
+            while (message_len < STR_BUFFER_SIZE && read_buffer[message_len] != '\0') {
+                ++message_len;
+            }
+
+            if (!validateCrc(read_buffer.data(), message_len)) {
+                char error_buffer[STR_BUFFER_SIZE];
+                snprintf(error_buffer, sizeof(error_buffer), "CRC check failed for log at address 0x%04X\n", i);
+                logs.emplace_back(error_buffer);
+            } else {
+                char log_entry[STR_BUFFER_SIZE];
+                snprintf(log_entry, sizeof(log_entry), "%s", reinterpret_cast<char *>(read_buffer.data()));
+                logs.emplace_back(log_entry);
+            }
+        }
+    }
+    return logs;
+}
+
+
 void EEPROM::printAllLogs() {
     printf("\n--EEPROM Log--\n");
 
-    for (uint16_t i = MIN_LOG_ADDR; i <= MAX_LOG_ADDRESS; i += STR_BUFFER_SIZE) {
-        std::vector<uint8_t> read_data(STR_BUFFER_SIZE);
-
-        if (eepromRead(i, read_data.data(), STR_BUFFER_SIZE)) {
-            if (read_data[0] != 0) {
-                size_t message_len = 0;
-                while (message_len < STR_BUFFER_SIZE && read_data[message_len] != '\0') {
-                    message_len++;
-                }
-
-                if (validateCrc(read_data.data(), message_len)) {
-                    char *message_read = reinterpret_cast<char *>(read_data.data());
-                    printf("Log [0x%04X]: %s\n", i, message_read);
-                } else {
-                    printf("Log [0x%04X]: CRC validation failed\n", i);
-                }
-            }
-        } else {
-            printf("Failed to read from address 0x%04X\n", i);
-            break;
-        }
+    for (const auto &log : getAllLogs()) {
+        printf("%s\n", log.c_str());
     }
 }
 

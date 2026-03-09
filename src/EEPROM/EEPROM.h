@@ -7,6 +7,7 @@
 #include <cstring>
 #include <string>
 #include <memory>
+#include <vector>
 
 #define EEPROM_ADDRESS 0x50
 #define STATUS_BUFF_SIZE 8 // for status updates
@@ -49,6 +50,7 @@ public:
 
     // functions for logging
     bool writeLog(const char *message);
+    std::vector<std::string> getAllLogs();
     void printAllLogs();
     void deleteLogs();
     bool isLogEmpty(uint16_t *next_addr);

@@ -228,6 +228,12 @@ void UI::task_impl() {
                 case STATISTICS:
                     load_statistics_screen();
                     break;
+                case MEASUREMENT_CHART:
+                    load_measurement_chart_screen();
+                    break;
+                case LOG_HISTORY:
+                    load_log_history_screen();
+                    break;
             }
         }
         vTaskDelayUntil(&lastWakeTime, period);
@@ -257,7 +263,7 @@ void UI::init_UI() {
     // irq is enabled and rotation is set for touch
     touch = std::make_shared<XPT2046_Touch>(touch_device.get());
     //touch->begin();
-    touch->setRotation(3);
+    touch->setRotation(0);
 
     //touch integration for lvgl
     lvgl_touch = std::make_shared<LVGLTouch>(touch.get(), 320, 240);
@@ -588,9 +594,26 @@ void UI::load_connecting_wifi_screen() {
     lv_spinner_set_anim_params(spinner, 5000, 100);
     lv_obj_set_style_arc_color(spinner, lv_color_hex(0xbfa782), LV_PART_INDICATOR);
     lv_obj_set_style_arc_color(spinner, lv_color_hex(0x2162cc), LV_PART_MAIN);
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
 
 void UI::load_statistics_screen() {
+    create_button(chart_button_cb, LV_ALIGN_CENTER, 0, -20, "T/RH HISTORY");
+    create_button(log_button_cb, LV_ALIGN_CENTER, 0, 40, "SHOW LOGS");
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
+}
+
+void UI::chart_button_cb(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    ui->navigate_to(MEASUREMENT_CHART);
+}
+
+void UI::log_button_cb(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    ui->navigate_to(LOG_HISTORY);
+}
+
+void UI::load_measurement_chart_screen() {
     lv_obj_t *chart;
     chart = lv_chart_create(lv_screen_active());
     lv_obj_set_size(chart, 280, 160);
@@ -622,9 +645,35 @@ void UI::load_statistics_screen() {
             lv_chart_set_next_value(chart, temp_series, (int16_t)(samples[i].temp * 10));
         }
     }
-    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, "< ");
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
 }
 
+void UI::load_log_history_screen() {
+    log_list = lv_list_create(lv_screen_active());
+    lv_obj_set_size(log_list, 250, 150);
+    lv_obj_align(log_list, LV_ALIGN_TOP_MID, 0, 10);
+
+    create_button(back_btn_cb, LV_ALIGN_BOTTOM_LEFT, 20, -10, " < ");
+    create_button(delete_log_button_cb, LV_ALIGN_BOTTOM_RIGHT, -20, -10, "DELETE ALL");
+
+    auto logs = eeprom->getAllLogs();
+    if (logs.empty()) {
+        lv_list_add_text(log_list, "No logs found");
+        return;
+    }
+    for (const auto& log : logs) {
+        lv_list_add_text(log_list, log.c_str());
+    }
+}
+
+void UI::delete_log_button_cb(lv_event_t *e) {
+    auto ui = (UI*)lv_event_get_user_data(e);
+    ui->eeprom->deleteLogs();
+    lv_obj_clean(lv_screen_active());
+    ui->log_list = nullptr;
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x4a5756), 0);
+    ui->load_log_history_screen();
+}
 
 void UI::create_button(lv_event_cb_t event_cb, lv_align_t align, int32_t x_ofs, int32_t y_ofs, const char *text) {
     lv_obj_t* btn = lv_button_create(lv_screen_active());

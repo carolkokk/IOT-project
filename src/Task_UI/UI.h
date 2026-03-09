@@ -24,6 +24,8 @@ enum Screens {
     ENTER_PASS,
     CONNECTING_WIFI,
     STATISTICS,
+    MEASUREMENT_CHART,
+    LOG_HISTORY,
 };
 
 struct System_Status {
@@ -130,6 +132,11 @@ private:
 
     //functions for displaying statistics
     void load_statistics_screen();
+    static void chart_button_cb(lv_event_t *e);
+    static void log_button_cb(lv_event_t *e);
+    void load_measurement_chart_screen();
+    void load_log_history_screen();
+    static void delete_log_button_cb(lv_event_t *e);
 
     //generic functions for creating buttons, going back
     void create_button(lv_event_cb_t event_cb, lv_align_t align, int32_t x_ofs, int32_t y_ofs, const char *text);
@@ -159,6 +166,8 @@ private:
     lv_obj_t *network_status_label = nullptr;
     lv_obj_t *current_network_name_label = nullptr;
     lv_obj_t *password_textarea = nullptr;
+
+    lv_obj_t *log_list = nullptr;
 };
 
 #endif //UI_H

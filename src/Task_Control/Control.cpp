@@ -58,6 +58,9 @@ void Control::task_impl() {
     dehum_water_sensor.Init();
     humidifier_water_sensor.Init();
 
+    // log re-boot
+    eeprom->writeStatus(REBOOT_ADDR, REBOOT_FLAG, STATUS_BUFF_SIZE);
+    eeprom->writeLog("Device reboot");
     //initial target rh
     eeprom->eepromRead(RH_SET_ADDR, &set_rh, sizeof(set_rh));
     uint8_t in_range_rh = set_rh;
@@ -101,11 +104,13 @@ void Control::task_impl() {
                     fan_hum.fan_on();
                     vTaskDelay(humidifier_on_interval);
                     humidifier.humidifier_off();
+                    eeprom->writeLog("Humidity too low. Increasing");
                     //fan_hum.fan_off();
                 } else if (current_rh > set_rh + 5) {
                     humidifier.humidifier_off();
                     fan_hum.fan_off();
                     dehumidifier.dehum_on();
+                    eeprom->writeLog("Humidity too high. Decreasing");
                 } else {
                     dehumidifier.dehum_off();
                     humidifier.humidifier_off();
@@ -123,6 +128,7 @@ void Control::task_impl() {
         // dehumidifier water alarm, triggers when water is detected
         if (dehum_water_alarm) {
             printf("WARNING: Too much water!.\r\n");
+            eeprom->writeLog("WARNING: Too much water!");
             xEventGroupSetBits(event_group, EVT_WATER_PRESENT);
         }else
         {
@@ -132,6 +138,7 @@ void Control::task_impl() {
         // humidifier water alarm, triggers when water is not detected
         if (humidifier_water_alarm) {
             printf("WARNING: No water detected! Tank is empty\r\n");
+            eeprom->writeLog("WARNING: No water detected!");
             xEventGroupSetBits(event_group, EVT_NO_WATER);
         }else
         {
