@@ -50,24 +50,35 @@ Clone the repository and initialize submodules:
 git submodule update --init --recursive
 
 # Configuration: 
-1. A file named configpass.h needs to be created under the src directory. It must contain the wifi credentials, thingspeak MQTT credentials for pico, and the thingspeak server certificate.
+A file named configpass.h needs to be created under the src directory. It must contain the wifi credentials, thingspeak MQTT credentials for pico, and the thingspeak server certificate.
 
 Example structure: 
+
 #define TLS_THINGSPEAK_SERVER "thingspeak server certificate"
+
 #define WIFI_SSID "your wifi ssid"
+
 #define WIFI_PASSWORD "your wifi password"
+
 #define MQTT_CLIENT_ID "the thingspeak mqtt client id created for pico"
+
 #define MQTT_USERNAME "the thingspeak mqtt username created for pico"
+
 #define MQTT_PASSWORD "the thingspeak mqtt password created for pico"
 
-2. A file named .env needs to be created under the mqtt_web directory. It must contain the thingspeak MQTT credentials for the web, the thingspeak channel id, and the username and password for user logging in to the website.
+
+A file named .env needs to be created under the mqtt_web directory. It must contain the thingspeak MQTT credentials for the web, the thingspeak channel id, and the username and password for user logging in to the website.
 
 Example structure:
+
 CHANNEL_ID= your_channel_id
+
 MQTT_USERNAME= thingspeak_mqtt_username_for_web
+
 MQTT_PASSWORD= thingspeak_mqtt_password_for_web
+
 CLIENT_ID= thingspeak_mqtt_client_id_for_web
 
 VALID_USERNAME= username_for_logging_in
-VALID_PASSWORD= password_for_logging_in
 
+VALID_PASSWORD= password_for_logging_in
