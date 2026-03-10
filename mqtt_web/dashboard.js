@@ -41,8 +41,8 @@ const input=document.getElementById("sp");
 
 const v=input.value;
 
-if(v===""||isNaN(v)||v<30||v>90){
-alert("Humidity must be between 30 and 90");
+if(v===""||isNaN(v)||v<30||v>70){
+alert("Humidity must be between 30 and 70");
 return;
 }
 
