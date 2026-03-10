@@ -1,83 +1,49 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
+
 <meta charset="utf-8">
-<title>Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-<style>
-/* Full page center layout */
-body {
-    margin: 0;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: #f4f6f8;
-    font-family: Arial, sans-serif;
-}
+<title>HUMIBOX Login</title>
 
-/* Login container */
-.login-box {
-    width: 320px;
-    padding: 30px;
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* Title */
-.login-box h2 {
-    margin-bottom: 20px;
-    text-align: center;
-}
-
-/* Input fields */
-.login-box input {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box;
-    font-size: 14px;
-}
-
-/* Input focus effect */
-.login-box input:focus {
-    outline: none;
-    border-color: #4a90e2;
-}
-
-/* Button */
-.login-box button {
-    width: 100%;
-    padding: 10px;
-    background-color: #4a90e2;
-    border: none;
-    color: white;
-    font-size: 14px;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-/* Button hover */
-.login-box button:hover {
-    background-color: #357ab8;
-}
-</style>
+<link rel="stylesheet" href="/style.css">
 
 </head>
-<body>
 
-<div class="login-box">
-    <h2>HUMIBOX Login</h2>
+<body class="login-page">
 
-    <form method="POST">
-        <input name="username" placeholder="Username" required>
-        <input name="password" type="password" placeholder="Password" required>
-        <button type="submit">Login</button>
-    </form>
+<div class="login-card">
+
+<h2>HUMIBOX Control Panel</h2>
+
+<form method="POST" autocomplete="on">
+
+<div class="input-group">
+<input name="username"
+placeholder="Username"
+required
+autocomplete="username">
+</div>
+
+<div class="input-group">
+<input name="password"
+type="password"
+placeholder="Password"
+required
+autocomplete="current-password">
+</div>
+
+<button type="submit" class="primary-btn">
+Sign In
+</button>
+
+</form>
+
+<div class="footer-text">
+Secure IoT Monitoring System
+</div>
+
 </div>
 
 </body>

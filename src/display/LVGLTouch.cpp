@@ -48,7 +48,7 @@ void LVGLTouch::read(lv_indev_data_t *data) {
 
     uint16_t raw_x, raw_y, raw_z;
     touch->readData(&raw_x, &raw_y, &raw_z);  // calls update() once
-    printf("RAW: x=%d, y=%d, z=%d\n", raw_x, raw_y, raw_z);
+    //printf("RAW: x=%d, y=%d, z=%d\n", raw_x, raw_y, raw_z);
 
     if (raw_z >= 300) {
         data->point.x = mapX(raw_x);
@@ -61,11 +61,12 @@ void LVGLTouch::read(lv_indev_data_t *data) {
 }
 
 uint16_t LVGLTouch::mapX(uint16_t raw_x) {
-    // to not go out of bounds
     if (raw_x < raw_x_min) raw_x = raw_x_min;
     if (raw_x > raw_x_max) raw_x = raw_x_max;
 
-    uint32_t mapped = (uint32_t)(raw_x - raw_x_min) * screen_width / (raw_x_max - raw_x_min);
+    uint32_t mapped = (uint32_t)(raw_x_max - raw_x) * screen_width /
+                      (raw_x_max - raw_x_min);
+
     if (mapped >= screen_width) mapped = screen_width - 1;
 
     return (uint16_t)mapped;
@@ -75,9 +76,11 @@ uint16_t LVGLTouch::mapY(uint16_t raw_y) {
     if (raw_y < raw_y_min) raw_y = raw_y_min;
     if (raw_y > raw_y_max) raw_y = raw_y_max;
 
-    uint32_t mapped = (uint32_t)(raw_y - raw_y_min) * screen_height / (raw_y_max - raw_y_min);
+    uint32_t mapped = (uint32_t)(raw_y_max - raw_y) * screen_height /
+                     (raw_y_max - raw_y_min);
     if (mapped >= screen_height) mapped = screen_height - 1;
 
+    if (mapped >= screen_height) mapped = screen_height - 1;
     return (uint16_t)mapped;
 }
 

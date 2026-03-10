@@ -39,7 +39,6 @@ void Network::task_impl() {
     IPStack ipstack(tls_client,cert_thingspeak,TLS_CLIENT_TIMEOUT_SECS,event_group);
     MQTTService mqtt(ipstack,HOSTNAME,PORT,MQTT_CLIENT_ID,sub_topic,pub_topic);
 
-
     vTaskDelay(pdMS_TO_TICKS(100));
 
     //check connection once in 15s
@@ -124,7 +123,6 @@ void Network::task_impl() {
                 xQueueSendToBack(to_Control, &send_msg, pdMS_TO_TICKS(10));
                 xQueueSendToBack(to_UI, &send_msg, pdMS_TO_TICKS(10));
             }
-
 
             //yield. socket that client uses calls cyw43_arch_poll()
             mqtt.loop(10);

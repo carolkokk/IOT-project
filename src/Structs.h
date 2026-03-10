@@ -65,6 +65,12 @@ struct Scan_result_msg {
     uint8_t result_count;
 };
 
+// for saving data to eeprom
+struct Measure_history {
+    float rh;
+    float temp;
+};
+
 
 //------------tls config--------------
 #define TLS_CLIENT_SERVER        "api.thingspeak.com"

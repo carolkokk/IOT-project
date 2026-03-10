@@ -22,12 +22,17 @@ enum Screens {
     NETWORK,
     AVAILABLE_NETWORKS,
     ENTER_PASS,
+    CONNECTING_WIFI,
+    STATISTICS,
+    MEASUREMENT_CHART,
+    LOG_HISTORY,
 };
 
 struct System_Status {
     bool initial_main = false;
     bool connecting_network = false;
     bool network_connected = false;
+    bool bad_auth = false;
     bool water_overflow = false;
     bool refill_water = false;
 };
@@ -41,7 +46,8 @@ class UI {
 public:
     UI(QueueHandle_t to_UI, QueueHandle_t to_Network, QueueHandle_t to_Control, QueueHandle_t scan_results_queue, QueueHandle_t credentials_to_network,
         EventGroupHandle_t event_group,
-        TickType_t period, uint32_t stack_size = 4096, UBaseType_t priority = tskIDLE_PRIORITY + 2);
+        TickType_t period, std::shared_ptr<EEPROM> eeprom,
+        uint32_t stack_size = 4096, UBaseType_t priority = tskIDLE_PRIORITY + 2);
     static void task_wrap(void *pvParameters);
 
 private:
@@ -56,7 +62,12 @@ private:
     EventGroupHandle_t event_group;
     TickType_t period;
 
+    std::shared_ptr<EEPROM> eeprom;
+
     Message sensor_data;
+
+    int32_t min_set_rh = 35;
+    int32_t max_set_rh = 65;
 
     std::shared_ptr<PicoSPIBus> spi_0;
     std::shared_ptr<PicoSPIBus> spi_1;
@@ -69,22 +80,23 @@ private:
 
     void init_UI(void);
 
-    Screens current_screen;
-    Screens next_screen;
+    Screens current_screen = MAIN;
+    Screens next_screen = MAIN;
 
     // flags for events (maybe do event bits?)
-    bool menu_selected;
-    bool rh_val_saved;
+    bool menu_selected = false;
+    bool rh_val_saved = false;
 
     // data variables
-    uint8_t menu_selection;
-    uint8_t set_rh_value;
+    uint8_t menu_selection = 0;
+    uint8_t set_rh_value = 50;
     //uint8_t target_rh = 50;
     //System_Status sys_status;
 
     // functions for loading different UI screens
     void load_main_screen(Message received, System_Status status);
-    void update_main_screen(System_Status status);
+    void update_wifi_status(System_Status status);
+    void update_water_status(System_Status status);
     static void dd_menu_callback(lv_event_t* e);
 
     // functions for setting rh screens
@@ -109,6 +121,7 @@ private:
     static void search_networks_btn_cb(lv_event_t * e);
     void load_available_networks(Scan_result_msg &msg);
     static void network_list_cb(lv_event_t *e);
+    void load_connecting_wifi_screen();
     // getting network scan results and loading to an array
     Scan_result scan_results[MAX_SCAN_RESULTS];
     uint8_t result_count = 0;
@@ -116,6 +129,14 @@ private:
     Network_credentials credentials;
     void load_password_screen();
     static void keyboard_cb(lv_event_t *e);
+
+    //functions for displaying statistics
+    void load_statistics_screen();
+    static void chart_button_cb(lv_event_t *e);
+    static void log_button_cb(lv_event_t *e);
+    void load_measurement_chart_screen();
+    void load_log_history_screen();
+    static void delete_log_button_cb(lv_event_t *e);
 
     //generic functions for creating buttons, going back
     void create_button(lv_event_cb_t event_cb, lv_align_t align, int32_t x_ofs, int32_t y_ofs, const char *text);
@@ -129,22 +150,24 @@ private:
     bool networks_loaded = false;
 
     // lvgl UI elements
-    lv_obj_t *temp_label;
-    lv_obj_t *rh_label;
-    lv_obj_t *dropdown;
-    lv_obj_t *tank_icon;
-    lv_obj_t *network_icon;
-    lv_obj_t *tank_status_label;
+    lv_obj_t *temp_label = nullptr;
+    lv_obj_t *rh_label = nullptr;
+    lv_obj_t *dropdown = nullptr;
+    lv_obj_t *tank_icon = nullptr;
+    lv_obj_t *network_icon = nullptr;
+    lv_obj_t *tank_status_label = nullptr;
 
     lv_style_t style_radio;
     lv_style_t style_radio_chk;
 
-    lv_obj_t * slider_label;
+    lv_obj_t * slider_label = nullptr;
 
-    lv_obj_t *network_list;
-    lv_obj_t *network_status_label;
-    lv_obj_t *current_network_name_label;
-    lv_obj_t *password_textarea;
+    lv_obj_t *network_list = nullptr;
+    lv_obj_t *network_status_label = nullptr;
+    lv_obj_t *current_network_name_label = nullptr;
+    lv_obj_t *password_textarea = nullptr;
+
+    lv_obj_t *log_list = nullptr;
 };
 
 #endif //UI_H

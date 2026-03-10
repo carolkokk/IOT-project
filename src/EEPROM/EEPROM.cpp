@@ -2,7 +2,6 @@
 
 #include <array>
 #include <vector>
-#include <bits/fs_fwd.h>
 
 EEPROM::EEPROM(std::shared_ptr<PicoI2C> i2cbus, uint8_t address):
     i2c(std::move(i2cbus)), addr(address) {}
@@ -122,7 +121,8 @@ bool EEPROM::readStatus(uint16_t address, std::string &status_buffer, size_t max
 
 // log impl
 uint16_t EEPROM::readLogAddress() {
-    uint16_t log_addr;
+    // default is set as invalid addr
+    uint16_t log_addr = 0xFFFF;
     if (!eepromRead(LOG_ADDR_STORAGE, (uint8_t *)&log_addr, sizeof(log_addr))) {
         return 0;
     }
@@ -189,30 +189,42 @@ bool EEPROM::writeLog(const char *message) {
     return true;
 }
 
+std::vector<std::string> EEPROM::getAllLogs() {
+    std::vector<std::string> logs;
+
+    for (uint16_t i = MIN_LOG_ADDR; i <= MAX_LOG_ADDRESS; i+= STR_BUFFER_SIZE) {
+        std::vector<uint8_t> read_buffer(STR_BUFFER_SIZE);
+        if (!eepromRead(i, read_buffer.data(), STR_BUFFER_SIZE)) {
+            logs.emplace_back("Failed to read log from EEPROM\n");
+            break;
+        }
+
+        if (read_buffer[0] != 0) {
+            size_t message_len = 0;
+            while (message_len < STR_BUFFER_SIZE && read_buffer[message_len] != '\0') {
+                ++message_len;
+            }
+
+            if (!validateCrc(read_buffer.data(), message_len)) {
+                char error_buffer[STR_BUFFER_SIZE];
+                snprintf(error_buffer, sizeof(error_buffer), "CRC check failed for log at address 0x%04X\n", i);
+                logs.emplace_back(error_buffer);
+            } else {
+                char log_entry[STR_BUFFER_SIZE];
+                snprintf(log_entry, sizeof(log_entry), "%s", reinterpret_cast<char *>(read_buffer.data()));
+                logs.emplace_back(log_entry);
+            }
+        }
+    }
+    return logs;
+}
+
+
 void EEPROM::printAllLogs() {
     printf("\n--EEPROM Log--\n");
 
-    for (uint16_t i = MIN_LOG_ADDR; i <= MAX_LOG_ADDRESS; i += STR_BUFFER_SIZE) {
-        std::vector<uint8_t> read_data(STR_BUFFER_SIZE);
-
-        if (eepromRead(i, read_data.data(), STR_BUFFER_SIZE)) {
-            if (read_data[0] != 0) {
-                size_t message_len = 0;
-                while (message_len < STR_BUFFER_SIZE && read_data[message_len] != '\0') {
-                    message_len++;
-                }
-
-                if (validateCrc(read_data.data(), message_len)) {
-                    char *message_read = reinterpret_cast<char *>(read_data.data());
-                    printf("Log [0x%04X]: %s\n", i, message_read);
-                } else {
-                    printf("Log [0x%04X]: CRC validation failed\n", i);
-                }
-            }
-        } else {
-            printf("Failed to read from address 0x%04X\n", i);
-            break;
-        }
+    for (const auto &log : getAllLogs()) {
+        printf("%s\n", log.c_str());
     }
 }
 
@@ -223,4 +235,77 @@ void EEPROM::deleteLogs() {
     }
     writeLogAddress(MIN_LOG_ADDR);
     printf("All logs deleted\n");
+}
+
+bool EEPROM::writeSample(float rh, float temp) {
+    // check index
+    uint16_t curr_idx = 0;
+    eepromRead(SAMPLE_IDX_ADDR, (uint8_t *)&curr_idx, sizeof(curr_idx));
+    if (curr_idx >= SAMPLE_COUNT) {
+        curr_idx = 0;
+    }
+
+    uint16_t total = 0;
+    eepromRead(SAMPLE_COUNT_ADDR, (uint8_t *)&total, sizeof(total));
+    if (total == 0xFFFF) total = 0; // when nothing is yet written
+    if (total < SAMPLE_COUNT) {
+        total++;
+        eepromWrite(SAMPLE_COUNT_ADDR, (uint8_t *)&total, sizeof(total));
+    }
+
+    uint8_t buf[SAMPLE_SIZE];
+    memcpy(buf, &rh, 4);
+    memcpy(buf + 4, &temp, 4);
+    uint16_t crc = crc16(buf, 8);
+    buf[8] = static_cast<uint8_t>(crc >> 8);
+    buf[9] = static_cast<uint8_t>(crc & 0xFF);
+
+    uint16_t addr = SAMPLE_DATA_ADDR + curr_idx * SAMPLE_SIZE;
+    if (!eepromWrite(addr, buf, SAMPLE_SIZE)) return false;
+
+    curr_idx = (curr_idx + 1) % SAMPLE_COUNT;
+    return eepromWrite(SAMPLE_IDX_ADDR, (uint8_t *)&curr_idx, sizeof(curr_idx));
+}
+
+bool EEPROM::readAllSamples(Measure_history *samples, uint8_t &count) {
+    uint16_t write_idx = 0;
+    eepromRead(SAMPLE_IDX_ADDR, (uint8_t *)&write_idx, sizeof(write_idx));
+
+    uint16_t total = 0;
+    eepromRead(SAMPLE_COUNT_ADDR, (uint8_t *)&total, sizeof(total));
+    if (total > SAMPLE_COUNT) total = SAMPLE_COUNT;
+
+    count = 0;
+    uint8_t buf[SAMPLE_SIZE];
+    uint16_t start = (write_idx + SAMPLE_COUNT - total) % SAMPLE_COUNT;
+    // reading oldest to newest samples
+    for (uint8_t i = 0; i < total; ++i) {
+        uint16_t slot = (start + i) % SAMPLE_COUNT;
+        uint16_t addr = SAMPLE_DATA_ADDR + slot * SAMPLE_SIZE;
+
+        if (eepromRead(addr, buf, SAMPLE_SIZE)) {
+            uint16_t stored_crc = (static_cast<uint16_t>(buf[8]) << 8) | buf[9];
+            uint16_t crc = crc16(buf, 8);
+
+            if (crc == stored_crc) {
+                memcpy(&samples[count].rh, buf, 4);
+                memcpy(&samples[count].temp, buf + 4, 4);
+                ++count;
+            }
+        }
+    }
+    return count > 0;
+}
+
+void EEPROM::deleteSamples() {
+    uint8_t zero = 0;
+    for (uint8_t i = 0; i < SAMPLE_COUNT; ++i) {
+        uint16_t addr = SAMPLE_DATA_ADDR + i * SAMPLE_SIZE;
+        eepromWrite(addr, &zero, 1);
+    }
+    uint16_t write_idx = 0;
+    eepromWrite(SAMPLE_IDX_ADDR, (uint8_t *)&write_idx, sizeof(write_idx));
+    uint16_t total = 0;
+    eepromWrite(SAMPLE_COUNT_ADDR, (uint8_t *)&total, sizeof(total));
+    printf("Samples deleted\n");
 }
