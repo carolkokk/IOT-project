@@ -128,7 +128,8 @@ static const uint8_t ili9341_init[] = {
 };
 
 ili9341::ili9341(std::shared_ptr<PicoSPIDevice> spi_dev, uint dc, uint rst, uint bl, uint16_t width, uint16_t height, uint8_t rotation)
-                  : spi(spi_dev), gpio_dc(dc), gpio_rst(rst), gpio_bl(bl), width(width), height(height), _xstart(0), _ystart(0) {
+                  : spi(spi_dev), gpio_dc(dc), gpio_rst(rst), gpio_bl(bl),
+                    _baseWidth(width), _baseHeight(height), width(width), height(height), _xstart(0), _ystart(0) {
     gpio_init(gpio_dc);
     gpio_set_dir(gpio_dc, GPIO_OUT);
 
@@ -146,9 +147,6 @@ ili9341::ili9341(std::shared_ptr<PicoSPIDevice> spi_dev, uint dc, uint rst, uint
     set_rst(1);
     spi->set_cs(1);
     sleep_ms(100);
-
-    windowWidth  = width;
-    windowHeight = height;
 
     // Reset panel if RST pin is available
     if (gpio_rst != UINT_MAX) {
@@ -172,18 +170,18 @@ void ili9341::init(const uint8_t *addr) {
     uint8_t numCommands, cmd, numArgs;
     uint16_t ms;
 
-    numCommands = *addr++;         // Number of commands
+    numCommands = *addr++;         // num of commands
     while (numCommands--) {
-      cmd     = *addr++;         // Command
-      numArgs = *addr++;         // Num args, possibly with delay flag
+      cmd     = *addr++;         // command
+      numArgs = *addr++;         // num of arguments
       ms      = numArgs & ST_CMD_DELAY;
-      numArgs &= ~ST_CMD_DELAY;  // Mask out delay bit
+      numArgs &= ~ST_CMD_DELAY;  // mask delay bit
 
       command(cmd, addr, numArgs);
       addr += numArgs;
 
       if (ms) {
-        ms = *addr++;          // Delay time (ms)
+        ms = *addr++;          // delay time
         if (ms == 255) ms = 500;
         sleep_ms(ms);
       }
@@ -198,32 +196,27 @@ void ili9341::setrotation(uint8_t r) {
     switch (r) {
       case 0:
         madctl = ILI9341_MADCTL_RGB;
-        width = windowWidth;
-        height = windowHeight;
-        _xstart = 0;
-        _ystart = 0;
+        width  = _baseWidth;
+        height = _baseHeight;
+        _xstart = 0; _ystart = 0;
         break;
       case 1:
         madctl = ILI9341_MADCTL_MV | ILI9341_MADCTL_MX | ILI9341_MADCTL_RGB;
-        width  = windowHeight;
-        height = windowWidth;
-        _xstart = 0;
-        _ystart = 0;
+        width  = _baseHeight;
+        height = _baseWidth;
+        _xstart = 0; _ystart = 0;
         break;
       case 2:
         madctl = ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB;
-        width  = windowWidth;
-        height = windowHeight;
-        _xstart = 0;
-        _ystart = 0;
+        width  = _baseWidth;
+        height = _baseHeight;
+        _xstart = 0; _ystart = 0;
         break;
       case 3:
-        madctl = ILI9341_MADCTL_MV | ILI9341_MADCTL_MY |
-                  ILI9341_MADCTL_RGB;
-        width  = windowHeight;
-        height = windowWidth;
-        _xstart = 0;
-        _ystart = 0;
+        madctl = ILI9341_MADCTL_MV | ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB;
+        width  = _baseHeight;
+        height = _baseWidth;
+        _xstart = 0; _ystart = 0;
         break;
     }
 
@@ -272,45 +265,33 @@ void ili9341::write(uint32_t value) {
     spi->write(data, 4);
 }
 
-void ili9341::writecommand(uint8_t cmd) {
-    set_dc(0);
-    write(cmd);
-    set_dc(1);
-}
-
 void ili9341::set_dc(bool value) const {
-    gpio_put(gpio_dc, value ? 1 : 0);
+    gpio_put(gpio_dc, value);
 }
 
 void ili9341::set_rst(bool value) const {
-    if (gpio_rst != UINT_MAX) {
-      gpio_put(gpio_rst, value ? 1 : 0);
-    }
+    if (gpio_rst != UINT_MAX) gpio_put(gpio_rst, value);
 }
 
 void ili9341::set_bl(bool value) const {
-    if (gpio_bl != UINT_MAX) {
-      gpio_put(gpio_bl, value ? 1 : 0);
-    }
+    if (gpio_bl != UINT_MAX) gpio_put(gpio_bl, value);
 }
 
 void ili9341::set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
-    writecommand(ILI9341_CASET);
-    write((uint8_t)(x0 >> 8)); write((uint8_t)(x0 & 0xFF));
-    write((uint8_t)(x1 >> 8)); write((uint8_t)(x1 & 0xFF));
+    set_dc(0); write((uint8_t)ILI9341_CASET); set_dc(1);
+    write(x0); write(x1);
 
-    writecommand(ILI9341_PASET);
-    write((uint8_t)(y0 >> 8)); write((uint8_t)(y0 & 0xFF));
-    write((uint8_t)(y1 >> 8)); write((uint8_t)(y1 & 0xFF));
+    set_dc(0); write((uint8_t)ILI9341_PASET); set_dc(1);
+    write(y0); write(y1);
 
-    writecommand(ILI9341_RAMWR);
+    set_dc(0); write((uint8_t)ILI9341_RAMWR); set_dc(1);
 }
 
 void ili9341::draw_pixels(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, const uint8_t *data, size_t len) {
-  spi->set_cs(0);  // CS low for entire operation
+  spi->set_cs(0);  // cs low
 
   set_window(x0, y0, x1, y1);
   write(data, len);
 
-  spi->set_cs(1);  // CS high to end
+  spi->set_cs(1);  // cs high to end
 }

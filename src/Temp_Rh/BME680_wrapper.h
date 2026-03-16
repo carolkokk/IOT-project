@@ -20,3 +20,4 @@ void   bme_delay_us(uint32_t us, void *intf_ptr);
 }
 
 #endif //HUMIBOX_BME680_WRAPPER_H
+

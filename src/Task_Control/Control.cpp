@@ -97,21 +97,37 @@ void Control::task_impl() {
                 if (bits & NETWORK_CONNECTED){
                     xQueueSendToBack(to_Network, &temp_rh, pdMS_TO_TICKS(100));
                 }
-                //if (!humidifier_water_alarm && !dehum_water_alarm) {
-                if (current_rh < set_rh) {
-                    dehumidifier.dehum_off();
-                    humidifier.humidifier_on();
-                    fan_hum.fan_on();
-                    vTaskDelay(humidifier_on_interval);
-                    humidifier.humidifier_off();
-                    eeprom->writeLog("Humidity too low. Increasing");
-                    //fan_hum.fan_off();
-                } else if (current_rh > set_rh + 5) {
-                    humidifier.humidifier_off();
-                    fan_hum.fan_off();
-                    dehumidifier.dehum_on();
-                    eeprom->writeLog("Humidity too high. Decreasing");
-                } else {
+                if (!humidifier_water_alarm && !dehum_water_alarm){
+                    // hum or dehum is on outside of the set_rh +-5% range
+                    uint8_t uin_rh = static_cast<uint8_t>(temp_rh.rh);
+                    if (uin_rh >= in_range_rh -5 && uin_rh <= in_range_rh +5) {
+                        in_range_rh = set_rh;
+                        dehumidifier.dehum_off();
+                        humidifier.humidifier_off();
+                        fan_hum.fan_off();
+                    }
+                    else if (uin_rh < set_rh) {
+                        in_range_rh = set_rh + 5;
+                        printf("set_rh in control task: %d\n", set_rh);
+                        printf("current rh in control task: %d\n", static_cast<uint8_t>(temp_rh.rh));
+                        dehumidifier.dehum_off();
+                        humidifier.humidifier_on();
+                        fan_hum.fan_on();
+                        vTaskDelay(humidifier_on_interval);
+                        humidifier.humidifier_off();
+                        printf("Humidifier on\n");
+                        printf("Fan on\n");
+                    } else if (uin_rh > set_rh) {
+                        in_range_rh = set_rh - 5;
+                        humidifier.humidifier_off();
+                        fan_hum.fan_off();
+                        printf("Humidifier off \n");
+                        printf("Fan off \n");
+                        dehumidifier.dehum_on();
+                        printf("Dehumidifier on\n");
+                    }
+                }else{
+                    //turn off all the devices if alarm is triggered
                     dehumidifier.dehum_off();
                     humidifier.humidifier_off();
                     fan_hum.fan_off();
@@ -127,6 +143,9 @@ void Control::task_impl() {
 
         // dehumidifier water alarm, triggers when water is detected
         if (dehum_water_alarm) {
+            dehumidifier.dehum_off();
+            humidifier.humidifier_off();
+            fan_hum.fan_off();
             printf("WARNING: Too much water!.\r\n");
             eeprom->writeLog("WARNING: Too much water!");
             xEventGroupSetBits(event_group, EVT_WATER_PRESENT);
@@ -137,6 +156,9 @@ void Control::task_impl() {
 
         // humidifier water alarm, triggers when water is not detected
         if (humidifier_water_alarm) {
+            dehumidifier.dehum_off();
+            humidifier.humidifier_off();
+            fan_hum.fan_off();
             printf("WARNING: No water detected! Tank is empty\r\n");
             eeprom->writeLog("WARNING: No water detected!");
             xEventGroupSetBits(event_group, EVT_NO_WATER);

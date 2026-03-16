@@ -7,10 +7,11 @@
 
 #include "lvgl.h"
 #include "XPT2046_Touch.h"
+#include <memory>
 
 class LVGLTouch {
     public:
-        LVGLTouch(XPT2046_Touch *touch, uint16_t width, uint16_t height);
+        LVGLTouch(std::shared_ptr<XPT2046_Touch> touch, uint16_t width, uint16_t height);
         bool init();
 
         // these values should be input after determining calibration
@@ -27,7 +28,7 @@ class LVGLTouch {
         uint16_t mapX(uint16_t raw_x);
         uint16_t mapY(uint16_t raw_y);
 
-        XPT2046_Touch *touch;
+        std::shared_ptr<XPT2046_Touch> touch;
         lv_indev_t *indev;
         uint16_t screen_width;
         uint16_t screen_height;
@@ -37,8 +38,6 @@ class LVGLTouch {
         uint16_t raw_x_max;
         uint16_t raw_y_min;
         uint16_t raw_y_max;
-
-        static LVGLTouch* instance;
 };
 
 
