@@ -1,0 +1,10 @@
+[submodule "lvgl"]
+	path = lvgl
+	url = https://github.com/lvgl/lvgl.git
+[submodule "src/Temp_Rh/BME68x_SensorAPI"]
+	path = src/Temp_Rh/BME68x_SensorAPI
+	url = https://github.com/boschsensortec/BME68x_SensorAPI.git
+
+[submodule "src/paho.mqtt.embedded-c"]
+	path = src/paho.mqtt.embedded-c
+	url = https://github.com/eclipse/paho.mqtt.embedded-c.git

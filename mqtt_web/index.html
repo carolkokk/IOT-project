@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>HUMIBOX Dashboard</title>
+
+<link rel="stylesheet" href="style.css">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script defer src="dashboard.js"></script>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+<h1>HUMIBOX Dashboard</h1>
+<a href="/logout" class="logout-btn">Logout</a>
+</div>
+
+<div class="card">
+
+<h3>Humidity Control</h3>
+
+<div class="input-row">
+<input id="sp" placeholder="Enter humidity (30-70)">
+<button class="primary-btn" onclick="sendSP()">Set</button>
+</div>
+
+<p>Current Setpoint: <strong id="sp-display">--</strong></p>
+
+<p id="alert-text" class="alert-text"></p>
+
+<h4>Presets</h4>
+
+<div class="preset-grid">
+
+<div class="preset-item" data-value="65" onclick="applyPreset(65)">
+<img src="icons/cigar.png" width="50">
+<div>Cigar</div>
+<small>65%</small>
+</div>
+
+<div class="preset-item" data-value="50" onclick="applyPreset(50)">
+<img src="icons/violin.png" width="50">
+<div>Violin</div>
+<small>50%</small>
+</div>
+
+<div class="preset-item" data-value="45" onclick="applyPreset(45)">
+<img src="icons/guitar-instrument.png" width="50">
+<div>Guitar</div>
+<small>45%</small>
+</div>
+
+<div class="preset-item" data-value="48" onclick="applyPreset(48)">
+<img src="icons/electric-guitar.png" width="50">
+<div>Electric Guitar</div>
+<small>48%</small>
+</div>
+
+<div class="preset-item" data-value="55" onclick="applyPreset(55)">
+<img src="icons/harmonica.png" width="50">
+<div>Harmonica</div>
+<small>55%</small>
+</div>
+
+</div>
+
+</div>
+
+<div class="card">
+<h3>Temperature & Humidity Trend</h3>
+<canvas id="thChart" height="100"></canvas>
+</div>
+
+<div class="card">
+<h3>System Summary (Last 30 Records)</h3>
+<div id="summary-panel" class="summary-grid"></div>
+</div>
+
+</div>
+
+</body>
+</html>

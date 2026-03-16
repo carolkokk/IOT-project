@@ -1,0 +1,16 @@
+.idea/
+cmake-build-*/
+pico-sdk/
+FreeRTOS-Kernel*/
+src/configpass.h
+
+Debug/
+build/
+CMakeFiles/
+*.o
+*.d
+
+.settings/
+
+.DS_Store
+.env
