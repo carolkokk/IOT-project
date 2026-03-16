@@ -4,11 +4,10 @@
 
 #include "XPT2046_Touch.h"
 
-#define Z_THRESHOLD 200
 #define MS_THRESHOLD 40
 
-XPT2046_Touch::XPT2046_Touch(PicoSPIDevice *spi_device)
-                            :spi_dev(spi_device),
+XPT2046_Touch::XPT2046_Touch(std::shared_ptr<PicoSPIDevice> spi_device)
+                            :spi_dev(std::move(spi_device)),
                             rotation(3),
                             xraw(0), yraw(0), zraw(0), msraw(0x80000000) {
 }
@@ -51,8 +50,6 @@ int16_t XPT2046_Touch::bestTwoAvg(uint16_t x, uint16_t y, uint16_t z) {
 void XPT2046_Touch::update() {
     int16_t data[6];
 
-    //if (!isrWake) return;
-
     uint32_t now = to_ms_since_boot(get_absolute_time());
     if (now - msraw < MS_THRESHOLD) return;
 
@@ -61,7 +58,7 @@ void XPT2046_Touch::update() {
     // starting spi transaction, cs active on LOW
     spi_dev->set_cs(0);
 
-    // Read Z1 - use transaction to write dummy bytes while reading
+    // read Z1 - use transaction to write dummy bytes while reading
     uint8_t tx[3] = {0xB1, 0x00, 0x00};
     uint8_t rx[3] = {0};
     spi_dev->transaction(tx, rx, 3);
@@ -69,7 +66,7 @@ void XPT2046_Touch::update() {
     z1 &= 0x0FFF;
     int z = z1 + 4095;
 
-    // Read Z2
+    // read Z2
     tx[0] = 0xC1; tx[1] = 0x00; tx[2] = 0x00;
     spi_dev->transaction(tx, rx, 3);
     uint16_t z2 = ((rx[1] << 8) | rx[2]) >> 3;

@@ -11,6 +11,9 @@
 #include "PicoSPIDevice.h"
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
+#include <memory>
+
+#define Z_THRESHOLD 200
 
 class TS_Point {
     public:
@@ -23,7 +26,7 @@ class TS_Point {
 
 class XPT2046_Touch {
     public:
-        XPT2046_Touch(PicoSPIDevice* spi_device);
+        XPT2046_Touch(std::shared_ptr<PicoSPIDevice> spi_device);
 
         //bool begin();
         TS_Point getPoint();
@@ -41,7 +44,7 @@ class XPT2046_Touch {
         void update();
         static int16_t bestTwoAvg(uint16_t x, uint16_t y, uint16_t z);
 
-        PicoSPIDevice* spi_dev;
+        std::shared_ptr<PicoSPIDevice> spi_dev;
         uint8_t rotation;
         uint16_t xraw, yraw, zraw;
         uint32_t msraw;

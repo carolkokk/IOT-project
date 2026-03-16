@@ -48,28 +48,3 @@ bool BME680::read_data(double &temp, double &rh) {
     return true;
 }
 
-/*double BME680::read_temp() {
-    bme68x_set_op_mode(BME68X_FORCED_MODE, &dev);
-    vTaskDelay(100);
-
-    uint8_t n_fields;
-    struct bme68x_data data{};
-
-    bme68x_get_data(BME68X_FORCED_MODE, &data, &n_fields, &dev);
-
-    return data.temperature;
-}
-
-double BME680::read_rh()
-{
-    bme68x_set_op_mode(BME68X_FORCED_MODE, &dev);
-    sleep_ms(100);
-
-    uint8_t n_fields;
-    struct bme68x_data data{};
-
-    bme68x_get_data(BME68X_FORCED_MODE, &data, &n_fields, &dev);
-
-    return data.humidity;
-}*/
-

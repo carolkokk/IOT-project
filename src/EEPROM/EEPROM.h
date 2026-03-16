@@ -39,6 +39,9 @@
 #define SAMPLE_END_ADDR (SAMPLE_DATA_ADDR + SAMPLE_COUNT * SAMPLE_SIZE)
 #define SAMPLE_COUNT_ADDR (SAMPLE_END_ADDR)
 
+// Touch calibration: magic(1) + x_min(2) + x_max(2) + y_min(2) + y_max(2) = 9 bytes
+#define TOUCH_CAL_ADDR (SAMPLE_COUNT_ADDR + 4)
+
 class EEPROM {
 public:
     EEPROM(std::shared_ptr<PicoI2C> i2cbus, uint8_t address = EEPROM_ADDRESS);

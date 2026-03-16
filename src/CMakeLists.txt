@@ -37,6 +37,7 @@ add_executable(${ProjectName}
         spi/PicoSPIDevice.cpp
         spi/PicoSPIDevice.h
 
+        display/display.h
         display/spi_device.h
         display/ili9341.cpp
         display/ili9341.h

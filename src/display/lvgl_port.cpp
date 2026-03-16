@@ -4,67 +4,42 @@
 
 #include "lvgl_port.h"
 
-#include <cstdio>
-
 #include "pico/time.h"
 
-LVGLPort *LVGLPort::instance = nullptr;
-
-LVGLPort::LVGLPort(std::shared_ptr<ili9341> display)
-                    : display(display) {
-    instance = this;
+LVGLPort::LVGLPort(std::shared_ptr<Display> displ)
+                    : drv(std::move(displ)), disp(nullptr) {
 }
 
 void LVGLPort::init() {
+    lv_tick_set_cb([]() -> uint32_t { return to_ms_since_boot(get_absolute_time()); });
     lv_init();
 
-    // buffer for pixels for 1/10 of the screen: (240*320)/3 = 7680
-    // 1 pixel = 2 bytes
+    // double-buffer.each covers 1/10 of screen (240*320/10 = 7680 pixels, 2 bytes each)
     static lv_color_t buf1[7680];
     static lv_color_t buf2[7680];
 
-    // creating lvgl display
-    disp = lv_display_create(display->get_width(), display->get_height());
-
-    //set flush callback func
+    disp = lv_display_create(drv->get_width(), drv->get_height());
+    lv_display_set_user_data(disp, this);
     lv_display_set_flush_cb(disp, display_flush_cb);
-
-    // setting buffers
-    lv_display_set_buffers(disp, buf1, NULL, sizeof(buf1), LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(disp, buf1, buf2, sizeof(buf1), LV_DISPLAY_RENDER_MODE_PARTIAL);
 }
 
-void LVGLPort::display_flush_cb(lv_display_t *display, const lv_area_t *area, uint8_t *px_map) {
-    //printf("FLUSH: x1=%d, y1=%d, x2=%d, y2=%d\n", area->x1, area->y1, area->x2, area->y2);
+void LVGLPort::display_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
+    auto *self = static_cast<LVGLPort*>(lv_display_get_user_data(disp));
 
-    // area dimension calculation
     uint16_t x0 = area->x1;
     uint16_t y0 = area->y1;
     uint16_t x1 = area->x2;
     uint16_t y1 = area->y2;
 
-    //printf("Window: x0=%d, y0=%d, x1=%d, y1=%d\n", x0, y0, x1, y1);
+    uint32_t pixels = (uint32_t)(x1 - x0 + 1) * (y1 - y0 + 1);
 
-    // set window
-    //instance->display->set_window(x0, y0, x1, y1); // no need cause setting window already in draw_pixels func
-
-    // num of pixel calculation
-    uint32_t width = (x1 - x0 + 1);
-    uint32_t height = (y1 -y0 + 1);
-    uint32_t pixels = width * height;
-    //int32_t bytes = pixels * 2;
-
-    //printf("Writing %lu pixels (%lu bytes)\n", pixels, pixels * 2);
+    // Swap bytes to big-endian for ILI9341
     auto *px16 = (uint16_t *)px_map;
     for (uint32_t i = 0; i < pixels; i++) {
         px16[i] = __builtin_bswap16(px16[i]);
     }
 
-    // write pixels
-    instance->display->draw_pixels(x0, y0, x1, y1, px_map, pixels * 2);
-    lv_display_flush_ready(display);
-    //printf("Flush complete\n");
-}
-
-void LVGLPort::tick(uint32_t ms) {
-    lv_tick_inc(ms);
+    self->drv->draw_pixels(x0, y0, x1, y1, px_map, pixels * 2);
+    lv_display_flush_ready(disp);
 }

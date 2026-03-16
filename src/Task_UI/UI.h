@@ -12,7 +12,7 @@
 
 #include "LVGLTouch.h"
 #include "display/lvgl_port.h"
-#include "display/ili9341.h"
+#include "display/Display.h"
 #include "display/XPT2046_Touch.h"
 
 enum Screens {
@@ -29,7 +29,6 @@ enum Screens {
 };
 
 struct System_Status {
-    bool initial_main = false;
     bool connecting_network = false;
     bool network_connected = false;
     bool bad_auth = false;
@@ -53,6 +52,7 @@ public:
 private:
     System_Status sys_status;
     void task_impl();
+    void init_task_state();
     const char *name = "UI";
     QueueHandle_t to_UI;
     QueueHandle_t to_Network;
@@ -66,35 +66,35 @@ private:
 
     Message sensor_data;
 
-    int32_t min_set_rh = 35;
-    int32_t max_set_rh = 65;
+    int32_t min_set_rh = 30;
+    int32_t max_set_rh = 70;
 
     std::shared_ptr<PicoSPIBus> spi_0;
     std::shared_ptr<PicoSPIBus> spi_1;
     std::shared_ptr<PicoSPIDevice> display_device;
     std::shared_ptr<PicoSPIDevice> touch_device;
-    std::shared_ptr<ili9341> display;
+    std::shared_ptr<Display> drv;
     std::shared_ptr<LVGLPort> lvgl_port;
     std::shared_ptr<XPT2046_Touch> touch;
     std::shared_ptr<LVGLTouch> lvgl_touch;
 
     void init_UI(void);
+    void load_or_init_calibration();
 
     Screens current_screen = MAIN;
     Screens next_screen = MAIN;
 
-    // flags for events (maybe do event bits?)
+    // flags for events
     bool menu_selected = false;
     bool rh_val_saved = false;
 
     // data variables
     uint8_t menu_selection = 0;
     uint8_t set_rh_value = 50;
-    //uint8_t target_rh = 50;
-    //System_Status sys_status;
 
-    // functions for loading different UI screens
-    void load_main_screen(Message received, System_Status status);
+    // functions for main screen
+    void build_main_screen(System_Status status);
+    void update_main_screen(const Message& received);
     void update_wifi_status(System_Status status);
     void update_water_status(System_Status status);
     static void dd_menu_callback(lv_event_t* e);
@@ -104,8 +104,6 @@ private:
     static void slider_event_cb(lv_event_t * e);
     static void save_btn_event_cb(lv_event_t * e);
     static void preset_btn_event_cb(lv_event_t * e);
-    //static void cancel_slider_btn_callback(lv_event_t *e);
-    //static void cancel_preset_btn_callback(lv_event_t *e);
     static constexpr Preset_Options PRESET_OPTIONS[] = {
         {"Acoustic gitar", 45},
         {"Electric guitar", 40},
@@ -122,15 +120,13 @@ private:
     void load_available_networks(Scan_result_msg &msg);
     static void network_list_cb(lv_event_t *e);
     void load_connecting_wifi_screen();
-    // getting network scan results and loading to an array
     Scan_result scan_results[MAX_SCAN_RESULTS];
     uint8_t result_count = 0;
-    // credential message
     Network_credentials credentials;
     void load_password_screen();
     static void keyboard_cb(lv_event_t *e);
 
-    //functions for displaying statistics
+    // functions for displaying statistics
     void load_statistics_screen();
     static void chart_button_cb(lv_event_t *e);
     static void log_button_cb(lv_event_t *e);
@@ -138,7 +134,7 @@ private:
     void load_log_history_screen();
     static void delete_log_button_cb(lv_event_t *e);
 
-    //generic functions for creating buttons, going back
+    // generic functions for creating buttons, going back
     void create_button(lv_event_cb_t event_cb, lv_align_t align, int32_t x_ofs, int32_t y_ofs, const char *text);
     void navigate_to(Screens screen);
     void navigate_back();
